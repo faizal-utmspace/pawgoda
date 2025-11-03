@@ -15,7 +15,7 @@ class PetBackButton extends StatelessWidget {
       style: ElevatedButton.styleFrom(
         elevation: 0,
         fixedSize: const Size(90, 0),
-        primary: Styles.bgWithOpacityColor,
+        backgroundColor: Styles.bgWithOpacityColor,
         shape: const StadiumBorder(),
         padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
       ),
