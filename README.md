@@ -1,4 +1,4 @@
-# 🐶 Adopt Me 🐹
+<!-- # 🐶 Adopt Me 🐹
 
 Pet Adoption App concept built with Flutter inspired by [Aman UX](https://www.figma.com/community/file/1038695719299612980).
 
@@ -28,4 +28,4 @@ For help getting started with Flutter, view our
 samples, guidance on mobile development, and a full API reference.
 
 
-[@martinoyovo](https://twitter.com/martinoyovo)
+[@martinoyovo](https://twitter.com/martinoyovo) -->
