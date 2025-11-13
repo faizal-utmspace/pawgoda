@@ -1,11 +1,22 @@
 include ':app'
 
+// Keep reading local.properties for compatibility with other scripts
 def localPropertiesFile = new File(rootProject.projectDir, "local.properties")
 def properties = new Properties()
 
 assert localPropertiesFile.exists()
 localPropertiesFile.withReader("UTF-8") { reader -> properties.load(reader) }
 
-def flutterSdkPath = properties.getProperty("flutter.sdk")
-assert flutterSdkPath != null, "flutter.sdk not set in local.properties"
-apply from: "$flutterSdkPath/packages/flutter_tools/gradle/app_plugin_loader.gradle"
+// Migrate away from applying Flutter's app_plugin_loader.gradle imperatively.
+// Use the declarative plugins block so Gradle can resolve the Flutter plugin.
+pluginManagement {
+	repositories {
+		gradlePluginPortal()
+		google()
+		mavenCentral()
+	}
+}
+
+plugins {
+	id "dev.flutter.flutter-plugin-loader" version "1.0.0"
+}

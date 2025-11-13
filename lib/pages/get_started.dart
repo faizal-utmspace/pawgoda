@@ -1,6 +1,6 @@
-import 'package:adoptme/pages/home.dart';
-import 'package:adoptme/utils/layouts.dart';
-import 'package:adoptme/utils/styles.dart';
+import 'package:pawgoda/pages/home.dart';
+import 'package:pawgoda/utils/layouts.dart';
+import 'package:pawgoda/utils/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:gap/gap.dart';

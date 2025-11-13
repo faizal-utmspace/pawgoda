@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="always.goodapps.adoptme">
+    package="utmspace.mobileappprogramming.pawgoda">
    <application
-        android:label="adoptme"
+        android:label="pawgoda"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

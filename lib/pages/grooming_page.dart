@@ -1,8 +1,8 @@
-import 'package:adoptme/models/package.dart';
-import 'package:adoptme/utils/layouts.dart';
-import 'package:adoptme/utils/styles.dart';
-import 'package:adoptme/widgets/back_button.dart';
-import 'package:adoptme/widgets/package_card.dart';
+import 'package:pawgoda/models/package.dart';
+import 'package:pawgoda/utils/layouts.dart';
+import 'package:pawgoda/utils/styles.dart';
+import 'package:pawgoda/widgets/back_button.dart';
+import 'package:pawgoda/widgets/package_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:gap/gap.dart';
@@ -168,11 +168,15 @@ class _GroomingPageState extends State<GroomingPage> {
               child: AnimatedList(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   shrinkWrap: true,
+                  // Use the dynamic backing list for the initial count so
+                  // insertItem() increments are consistent with the data.
                   initialItemCount: _packages.length,
                   key: listKey,
                   physics: const BouncingScrollPhysics(),
                   itemBuilder: (c, i, animation) {
-                    final package = Package.fromJson(groomingList[i]);
+                    // Read from the dynamic list which holds the maps used to
+                    // construct Package instances as items are inserted.
+                    final package = Package.fromJson(_packages[i]);
                     return SlideTransition(
                       position: Tween<Offset>(
                         begin: const Offset(-0.5, 0),
