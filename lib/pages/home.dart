@@ -344,7 +344,7 @@ class _AdoptPage extends StatelessWidget {
           children: const [
             PetCard(petPath: 'assets/svg/cat1.svg', petName: 'Cat Adoption'),
             Gap(28),
-            PetCard(petPath: 'assets/svg/dog1.svg', petName: 'Dog Adoption', height: 68),
+            PetCard(petPath: 'assets/svg/dog1.svg', petName: 'Dog Adoption'),
           ],
         ),
         const Gap(25),
