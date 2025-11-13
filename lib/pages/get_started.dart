@@ -1,3 +1,4 @@
+import 'package:adoptme/pages/gmail.dart';
 import 'package:adoptme/pages/home.dart';
 import 'package:adoptme/utils/layouts.dart';
 import 'package:adoptme/utils/styles.dart';
@@ -30,7 +31,7 @@ class GetStarted extends StatelessWidget {
               const Gap(25),
               Container(
                 margin: const EdgeInsets.symmetric(horizontal: 70),
-                child: Text('Re-Home and\nAdopt a Pet',
+                child: Text('PawGoda',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Styles.blackColor,
@@ -41,7 +42,7 @@ class GetStarted extends StatelessWidget {
               ),
               const Gap(5),
               Text(
-                'Adopt me, we both need the love',
+                'Trusted care for pets, peace of mind for owners.',
                 textScaleFactor: value,
                 style: TextStyle(color: Styles.highlightColor),
               ),
@@ -51,7 +52,7 @@ class GetStarted extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.push(
-                        context, MaterialPageRoute(builder: (_) => const Home()));
+                        context, MaterialPageRoute(builder: (_) => const GmailLogin()));
                   },
                   style: ElevatedButton.styleFrom(
                     elevation: 0,

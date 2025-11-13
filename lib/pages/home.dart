@@ -31,7 +31,7 @@ class Home extends StatelessWidget {
       },
       {
         'text': 'Help',
-        'icon': 'assets/nav_icons/help_icon.svg',
+        'icon': 'assets/nav_icons/ai_icon.svg',
       },
     ];
     final size = Layouts.getSize(context);
@@ -115,7 +115,7 @@ class Home extends StatelessWidget {
               PetCard(
                 petPath: 'assets/svg/dog1.svg',
                 petName: 'Dog Adoption',
-                height: 68,
+                //height: 68,
               ),
             ],
           ),
