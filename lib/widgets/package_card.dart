@@ -1,6 +1,6 @@
-import 'package:adoptme/models/package.dart';
-import 'package:adoptme/pages/vet_page.dart';
-import 'package:adoptme/utils/styles.dart';
+import 'package:pawgoda/models/package.dart';
+import 'package:pawgoda/pages/vet_page.dart';
+import 'package:pawgoda/utils/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:gap/gap.dart';

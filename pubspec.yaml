@@ -1,4 +1,4 @@
-name: adoptme
+name: pawgoda
 description: A new Flutter project.
 
 # The following line prevents the package from being accidentally published to
@@ -36,6 +36,7 @@ dependencies:
   cupertino_icons: ^1.0.2
   flutter_svg: ^2.2.1
   gap: ^3.0.1
+  intl: ^0.17.0 
   #google_fonts: ^2.3.0
 
 dev_dependencies:

@@ -1,10 +1,10 @@
-import 'package:adoptme/pages/grooming_page.dart';
-import 'package:adoptme/pages/vet_page.dart';
-import 'package:adoptme/utils/layouts.dart';
-import 'package:adoptme/utils/styles.dart';
-import 'package:adoptme/widgets/animated_title.dart';
-import 'package:adoptme/widgets/pet_card.dart';
-import 'package:adoptme/widgets/stories_section.dart';
+import 'package:pawgoda/pages/grooming_page.dart';
+import 'package:pawgoda/pages/vet_page.dart';
+import 'package:pawgoda/utils/layouts.dart';
+import 'package:pawgoda/utils/styles.dart';
+import 'package:pawgoda/widgets/animated_title.dart';
+import 'package:pawgoda/widgets/pet_card.dart';
+import 'package:pawgoda/widgets/stories_section.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:gap/gap.dart';
@@ -31,7 +31,7 @@ class Home extends StatelessWidget {
       },
       {
         'text': 'Help',
-        'icon': 'assets/nav_icons/help_icon.svg',
+        'icon': 'assets/nav_icons/ai_icon.svg',
       },
     ];
     final size = Layouts.getSize(context);
@@ -115,7 +115,7 @@ class Home extends StatelessWidget {
               PetCard(
                 petPath: 'assets/svg/dog1.svg',
                 petName: 'Dog Adoption',
-                height: 68,
+                //height: 68,
               ),
             ],
           ),

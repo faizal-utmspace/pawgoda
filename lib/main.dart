@@ -1,5 +1,5 @@
-import 'package:adoptme/pages/get_started.dart';
-import 'package:adoptme/utils/styles.dart';
+import 'package:pawgoda/pages/get_started.dart';
+import 'package:pawgoda/utils/styles.dart';
 import 'package:flutter/material.dart';
 
 void main() {
