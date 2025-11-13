@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
 class Layouts {
-  static getTheme(BuildContext context) {
+  static ThemeData getTheme(BuildContext context) {
     return Theme.of(context);
   }
 
-  static getSize(BuildContext context) {
+  static Size getSize(BuildContext context) {
     return MediaQuery.of(context).size;
   }
 }
