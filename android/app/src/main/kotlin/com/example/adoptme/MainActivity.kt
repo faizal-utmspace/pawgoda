@@ -1,4 +1,4 @@
-package com.example.adoptme
+package utmspace.mobileappprogramming.pawgoda
 
 import io.flutter.embedding.android.FlutterActivity
 

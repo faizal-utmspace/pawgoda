@@ -1,5 +1,10 @@
+import 'dart:developer';
+
 import 'package:pawgoda/pages/get_started.dart';
 import 'package:pawgoda/pages/home.dart';
+import 'package:pawgoda/pages/homepet.dart';
+import 'package:pawgoda/pages/staff/home_staff.dart';
+import 'package:pawgoda/utils/helpers.dart';
 import 'package:pawgoda/utils/styles.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -37,7 +42,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
+      debugShowCheckedModeBanner: true,
       title: 'PawGoda',
       theme: ThemeData(
           fontFamily: 'Poppins',
@@ -45,7 +50,47 @@ class MyApp extends StatelessWidget {
           colorScheme:
               ColorScheme.fromSwatch().copyWith(primary: Styles.blackColor)),
       // home: const GetStarted(),
-      home: const Home(),
+      home: const AuthGate(),
+    );
+  }
+}
+
+class AuthGate extends StatelessWidget {
+  const AuthGate({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    // Use the currentUser synchronously; load SharedPreferences asynchronously
+    // and decide the initial screen via FutureBuilder.
+    final user = FirebaseAuth.instance.currentUser;
+    final userData = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user?.uid)
+        .get();
+
+    return FutureBuilder<DocumentSnapshot>(
+      future: userData,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        } else {
+          if (user != null && snapshot.hasData) {
+            final data = snapshot.data!.data();
+            final role = data is Map<String, dynamic> ? data['role'] as String? : null;
+
+            log(  'User role: $role'  );
+            if (role == 'staff') {
+              return const HomeStaffPage();
+            } else {
+              return const Homepet();
+            }
+          } else {
+            return const GetStarted();
+          }
+        }
+      },
     );
   }
 }

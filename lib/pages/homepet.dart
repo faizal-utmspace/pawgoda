@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:pawgoda/pages/staff_activity_management_page.dart';
 import 'package:pawgoda/pages/staff_bookings_list_page.dart';
 import 'package:pawgoda/pages/user_profile_page.dart';
@@ -20,7 +22,16 @@ class Homepet extends StatefulWidget {
 
 class _HomepetState extends State<Homepet> {
   int _currentIndex = 0;
-
+  final Map<String, dynamic> userData = {
+    'name': '',
+    'email': '',
+    'phone': '',
+    'profileImageUrl': null, // URL from Firebase Storage
+    'memberSince': '',
+    'totalBookings': 0,
+    'activePets': 0,
+    'role': '-'
+  };
   final List<Map<String, dynamic>> navItems = [
     {
       'text': 'Hotel', 
@@ -28,7 +39,7 @@ class _HomepetState extends State<Homepet> {
       'isActive': true
     },
     {
-      'text': 'Staff', 
+      'text': 'Bookings', 
       'icon': 'assets/nav_icons/vet_icon.svg', 
       'page': const StaffBookingsListPage()
     },
@@ -36,251 +47,312 @@ class _HomepetState extends State<Homepet> {
       'text': 'Profile', 
       'icon': 'assets/nav_icons/profile_icon.svg', 
       'page': const UserProfilePage()
-    },
-    {
-      'text': 'Chatbot', 
-      'icon': 'assets/nav_icons/ai_icon.svg',
-      'page': const AIChatbotPage()
-    },
+    }
   ];
 
   void _onNavItemTap(int index, Map<String, dynamic> item) {
+    // Switch tab in place. We use IndexedStack in the body so each tab's
+    // state is preserved when switching.
     setState(() {
       _currentIndex = index;
     });
-    
-    if (item['page'] != null) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => item['page']),
-      ).then((_) {
-        setState(() {
-          _currentIndex = 0;
-        });
-      });
-    }
   }
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-          children: [
-            // Header with profile and search
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  height: 50,
-                  width: 50,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle, 
-                    color: Styles.bgColor
-                  ),
-                  child: Image.asset(
-                    'assets/svg/sticker.png',
-                    errorBuilder: (context, error, stackTrace) {
-                      return Icon(Icons.pets, color: Styles.highlightColor);
-                    },
-                  ),
-                ),
-                const Gap(10),
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 15),
-                    height: 50,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(50),
-                      color: Styles.bgColor,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          showModalBottomSheet(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (ctx) {
+              return DraggableScrollableSheet(
+                initialChildSize: 0.9,
+                minChildSize: 0.4,
+                maxChildSize: 0.95,
+                expand: false,
+                builder: (context, scrollController) {
+                  return Container(
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                     ),
-                    child: Row(
-                      children: [
-                        SvgPicture.asset(
-                          'assets/svg/Search.svg',
-                          height: 20,
-                          color: Styles.highlightColor,
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                      child: Column(
+                        children: [
+                          // small grabber
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12, bottom: 6),
+                            child: Container(
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[300],
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: AIChatbotPage(),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
+        child: const Icon(Icons.smart_toy_outlined),
+      ),
+      body: SafeArea(
+        child: userData.isNotEmpty ? IndexedStack(
+          index: _currentIndex,
+          children: [
+            // Tab 0: main Homepet content (original ListView)
+            ListView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              children: [
+                // Header with profile and search
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      height: 50,
+                      width: 50,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle, 
+                        color: Styles.bgColor
+                      ),
+                      child: Image.asset(
+                        'assets/svg/sticker.png',
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(Icons.pets, color: Styles.highlightColor);
+                        },
+                      ),
+                    ),
+                    const Gap(10),
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 15),
+                        height: 50,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(50),
+                          color: Styles.bgColor,
                         ),
-                        const Gap(10),
-                        Expanded(
-                          child: Text(
-                            'Search rooms, services...',
-                            style: TextStyle(
+                        child: Row(
+                          children: [
+                            SvgPicture.asset(
+                              'assets/svg/Search.svg',
+                              height: 20,
                               color: Styles.highlightColor,
-                              fontSize: 14,
+                            ),
+                            const Gap(10),
+                            Expanded(
+                              child: Text(
+                                'Search rooms, services...',
+                                style: TextStyle(
+                                  color: Styles.highlightColor,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            const Gap(10),
+                            SvgPicture.asset(
+                              'assets/svg/scanner.svg', 
+                              height: 20,
+                              color: Styles.highlightColor,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const Gap(30),
+                
+                // Welcome title
+                const AnimatedTitle(title: 'Welcome to PawGoda Pet Hotel'),
+                const Gap(15),
+                
+                // Pet cards row - RESPONSIVE APPROACH
+                Row(
+                  children: [
+                    Expanded(
+                      child: AspectRatio(
+                        aspectRatio: 0.9, // Adjust this value as needed
+                        child: Column(
+                          children: [
+                            PetCard(
+                              petPath: 'assets/svg/cat1.svg',
+                              petName: 'Cat Hotel',
+                              petType: 'Cat',
+                              isBooking: true,
+                            )
+                          ] ,
+                        ),
+                      ),
+                    ),
+                    const Gap(15),
+                    Expanded(
+                      child: AspectRatio(
+                        aspectRatio: 0.9, // Adjust this value as needed
+                        child: Column(
+                          children: [
+                            PetCard(
+                              petPath: 'assets/svg/dog1.svg',
+                              petName: 'Dog Hotel',
+                              petType: 'Dog',
+                              isBooking: true,
+                            )
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                
+                const Gap(25),
+                
+                // Special Services
+                const AnimatedTitle(title: 'Special Services'),
+                const Gap(15),
+                
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Styles.bgColor,
+                    borderRadius: BorderRadius.circular(27),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Luxury Cat Suites 🐾",
+                        style: TextStyle(
+                          fontSize: 18, 
+                          fontWeight: FontWeight.bold,
+                          color: Styles.blackColor,
+                        ),
+                      ),
+                      const Gap(12),
+                      Text(
+                        "Air-conditioned rooms, 24/7 monitoring, and cozy beds for your furry friend.",
+                        style: TextStyle(
+                          fontSize: 13, 
+                          color: Styles.blackColor.withOpacity(0.7),
+                          height: 1.4,
+                        ),
+                      ),
+                      const Gap(15),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            // Show dialog to select pet type
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Select Pet Type'),
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ListTile(
+                                      leading: const Text('🐱', style: TextStyle(fontSize: 24)),
+                                      title: const Text('Cat'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => const BookingPage(petType: 'Cat')
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    ListTile(
+                                      leading: const Text('🐶', style: TextStyle(fontSize: 24)),
+                                      title: const Text('Dog'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => const BookingPage(petType: 'Dog')
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                    ListTile(
+                                      leading: const Text('🐰', style: TextStyle(fontSize: 24)),
+                                      title: const Text('Rabbit'),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => const BookingPage(petType: 'Rabbit')
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Styles.bgWithOpacityColor,
+                            foregroundColor: Styles.highlightColor,
+                            shape: const StadiumBorder(),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24, 
+                              vertical: 12
+                            ),
+                            elevation: 0,
+                          ),
+                          child: const Text(
+                            "Book Now",
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
-                        const Gap(10),
-                        SvgPicture.asset(
-                          'assets/svg/scanner.svg', 
-                          height: 20,
-                          color: Styles.highlightColor,
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
+                
+                const Gap(25),
+                
+                // Community Section
+                const AnimatedTitle(title: 'Community'),
+                const Gap(15),
+                const StoriesSection(),
+                
+                const Gap(20),
               ],
             ),
-            
-            const Gap(30),
-            
-            // Welcome title
-            const AnimatedTitle(title: 'Welcome to PawGoda Pet Hotel'),
-            const Gap(15),
-            
-            // Pet cards row - RESPONSIVE APPROACH
-            Row(
-              children: [
-                Expanded(
-                  child: AspectRatio(
-        aspectRatio: 0.9, // Adjust this value as needed
-        child: PetCard(
-          petPath: 'assets/svg/cat1.svg',
-          petName: 'Cat Hotel',
-          petType: 'Cat',
-          isBooking: true,
-        ),
-      ),
-    ),
-                const Gap(15),
-                Expanded(
-                  child: AspectRatio(
-        aspectRatio: 0.9, // Adjust this value as needed
-        child: PetCard(
-          petPath: 'assets/svg/dog1.svg',
-          petName: 'Dog Hotel',
-          petType: 'Dog',
-          isBooking: true,
-        ),
-      ),
-    ),
-  ],
-            ),
-            
-            const Gap(25),
-            
-            // Special Services
-            const AnimatedTitle(title: 'Special Services'),
-            const Gap(15),
-            
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Styles.bgColor,
-                borderRadius: BorderRadius.circular(27),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Luxury Cat Suites 🐾",
-                    style: TextStyle(
-                      fontSize: 18, 
-                      fontWeight: FontWeight.bold,
-                      color: Styles.blackColor,
-                    ),
-                  ),
-                  const Gap(12),
-                  Text(
-                    "Air-conditioned rooms, 24/7 monitoring, and cozy beds for your furry friend.",
-                    style: TextStyle(
-                      fontSize: 13, 
-                      color: Styles.blackColor.withOpacity(0.7),
-                      height: 1.4,
-                    ),
-                  ),
-                  const Gap(15),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        // Show dialog to select pet type
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Select Pet Type'),
-                            content: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                ListTile(
-                                  leading: const Text('🐱', style: TextStyle(fontSize: 24)),
-                                  title: const Text('Cat'),
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const BookingPage(petType: 'Cat')
-                                      ),
-                                    );
-                                  },
-                                ),
-                                ListTile(
-                                  leading: const Text('🐶', style: TextStyle(fontSize: 24)),
-                                  title: const Text('Dog'),
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const BookingPage(petType: 'Dog')
-                                      ),
-                                    );
-                                  },
-                                ),
-                                ListTile(
-                                  leading: const Text('🐰', style: TextStyle(fontSize: 24)),
-                                  title: const Text('Rabbit'),
-                                  onTap: () {
-                                    Navigator.pop(context);
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => const BookingPage(petType: 'Rabbit')
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Styles.bgWithOpacityColor,
-                        foregroundColor: Styles.highlightColor,
-                        shape: const StadiumBorder(),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24, 
-                          vertical: 12
-                        ),
-                        elevation: 0,
-                      ),
-                      child: const Text(
-                        "Book Now",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            
-            const Gap(25),
-            
-            // Community Section
-            const AnimatedTitle(title: 'Community'),
-            const Gap(15),
-            const StoriesSection(),
-            
-            const Gap(20),
+
+            // Tab 1: StaffBookingsListPage
+            const StaffBookingsListPage(),
+
+            // Tab 2: UserProfilePage
+            const UserProfilePage()
           ],
-        ),
+        ) : Container(),
       ),
       
       // Bottom Navigation Bar

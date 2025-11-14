@@ -1,5 +1,4 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="utmspace.mobileappprogramming.pawgoda">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
    <application
         android:label="pawgoda"
         android:name="${applicationName}"

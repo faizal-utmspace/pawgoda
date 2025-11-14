@@ -97,42 +97,6 @@ class _PetCardState extends State<PetCard> {
                 ],
                 
                 const SizedBox(height: 8), // Reduced from 12
-                
-                // Button section
-                AnimatedScale(
-                  duration: const Duration(milliseconds: 800),
-                  scale: value,
-                  curve: Curves.bounceInOut,
-                  child: ElevatedButton(
-                    onPressed: _navigate,
-                    style: ElevatedButton.styleFrom(
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 6), // Reduced padding
-                      backgroundColor: Styles.bgWithOpacityColor,
-                      shape: const StadiumBorder(),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          widget.isBooking ? 'Book' : 'Enter',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Styles.highlightColor,
-                            fontSize: 10, // Reduced font size
-                          ),
-                        ),
-                        const SizedBox(width: 3), // Reduced from 4
-                        SvgPicture.asset(
-                          'assets/svg/arrow_right.svg',
-                          height: 9, // Reduced from 10
-                          width: 9, // Reduced from 10
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
               ],
             ),
           );

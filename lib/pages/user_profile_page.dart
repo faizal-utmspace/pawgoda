@@ -1,6 +1,15 @@
+import 'dart:developer';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
+import 'package:pawgoda/models/booking.dart';
+import 'package:pawgoda/models/pet.dart';
+import 'package:pawgoda/pages/login_page.dart';
 import '../utils/styles.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:pawgoda/models/user.dart' as user_model;
 
 class UserProfilePage extends StatefulWidget {
   const UserProfilePage({Key? key}) : super(key: key);
@@ -10,371 +19,391 @@ class UserProfilePage extends StatefulWidget {
 }
 
 class _UserProfilePageState extends State<UserProfilePage> {
-  // Mock user data (in real app, this would come from Firebase Auth)
-  final Map<String, dynamic> userData = {
-    'name': 'afi',
-    'email': 'afi@gmail.com',
-    'phone': '+60 12-345 6789',
-    'profileImageUrl': null, // URL from Firebase Storage
-    'role': 'customer', // customer, staff, admin
-    'memberSince': '2024-01-15',
-    'totalBookings': 12,
-    'activePets': 2,
-  };
+  final GoogleSignIn googleSignIn = GoogleSignIn(
+    clientId:
+        "980151251492-vegm8onmtimk2u6mljm55ef6ksh6o2s0.apps.googleusercontent.com",
+    scopes: ['email', 'profile'],
+  );
 
-  bool isLoading = false;
 
-  // Mock Google Sign-In (in real app, use firebase_auth and google_sign_in packages)
-  Future<void> _handleGoogleSignIn() async {
-    setState(() {
-      isLoading = true;
-    });
+  @override
+  void initState() {
+    super.initState();
+  }
 
-    // Simulate sign-in delay
-    await Future.delayed(const Duration(seconds: 2));
+  Future<Map<String, dynamic>> getUserData(String uid) async {
+    final userDoc = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .get();
 
-    // In real app:
-    // final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
-    // final GoogleSignInAuthentication? googleAuth = await googleUser?.authentication;
-    // final credential = GoogleAuthProvider.credential(
-    //   accessToken: googleAuth?.accessToken,
-    //   idToken: googleAuth?.idToken,
-    // );
-    // await FirebaseAuth.instance.signInWithCredential(credential);
+    final bookingsQuery = FirebaseFirestore.instance
+        .collection('bookings')
+        .where('uid', isEqualTo: uid)
+        .get();
 
-    setState(() {
-      isLoading = false;
-    });
+    final petsQuery = FirebaseFirestore.instance
+        .collection('pets')
+        .where('uid', isEqualTo: uid)
+        .get();
+
+    // Wait for all 3 to complete
+    final results = await Future.wait([
+      userDoc,
+      bookingsQuery,
+      petsQuery,
+    ]);
+
+    log('results: ${results[0].toString()}');
+
+    return {
+      'user': results[0],
+      'bookings': results[1],
+      'pets': results[2],
+    };
+  }
+
+
+  Future<void> _logout() async {
+    await googleSignIn.signOut();
+    await FirebaseAuth.instance.signOut();
+
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Signed in successfully!'),
+          content: const Text('Signed out successfully!'),
           backgroundColor: Colors.green,
           behavior: SnackBarBehavior.floating,
         ),
       );
     }
-  }
 
-  Future<void> _handleSignOut() async {
-    // In real app: await FirebaseAuth.instance.signOut();
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Sign Out'),
-        content: const Text('Are you sure you want to sign out?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Signed out successfully'),
-                  backgroundColor: Styles.highlightColor,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade400,
-            ),
-            child: const Text('Sign Out'),
-          ),
-        ],
-      ),
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const LoginPage()),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: Styles.highlightColor),
-          onPressed: () => Navigator.pop(context),
+
+    final userInstance = FirebaseAuth.instance.currentUser;
+    log('Building UserProfilePage for user: ${userInstance?.uid}');
+    
+    // If no user is logged in, redirect to login page
+    if (userInstance == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const LoginPage()),
+        );
+      });
+      return Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
         ),
-        title: Text(
-          'Profile',
-          style: TextStyle(
-            color: Styles.blackColor,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: Icon(Icons.edit, color: Styles.highlightColor),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Edit profile feature coming soon!'),
-                  backgroundColor: Styles.highlightColor,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: isLoading
-            ? Center(
-                child: CircularProgressIndicator(
-                  color: Styles.highlightColor,
-                ),
-              )
-            : ListView(
-                padding: const EdgeInsets.all(20),
-                children: [
-                  // Profile header
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Styles.highlightColor,
-                          Styles.highlightColor.withOpacity(0.8),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Styles.highlightColor.withOpacity(0.3),
-                          blurRadius: 15,
-                          offset: const Offset(0, 5),
-                        ),
-                      ],
+      );
+    }
+    
+    return FutureBuilder(
+      future: getUserData(userInstance.uid),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Center(child: CircularProgressIndicator());
+        }
+
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+
+        if (!snapshot.hasData) {
+          return Center(child: Text('No data found'));
+        }
+
+        final data = snapshot.data as Map<String, dynamic>;
+
+        final userDoc = data['user'] as DocumentSnapshot<Map<String, dynamic>>;
+        final bookings = data['bookings'] as QuerySnapshot<Map<String, dynamic>>;
+        final pets = data['pets'] as QuerySnapshot<Map<String, dynamic>>;
+
+        final user = user_model.User.fromJson(userDoc.data()!);
+        final bookingList = bookings.docs.map((e) => Booking.fromJson(e.data())).toList();
+        final petList = pets.docs.map((e) => Pet.fromJson(e.data())).toList();
+
+        print(  'User data loaded: ${user.toString()}, Bookings: ${bookingList.length}, Pets: ${petList.length}'  );
+
+        return Scaffold(
+          appBar: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            title: Text(
+              'Profile',
+              style: TextStyle(
+                color: Styles.blackColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            centerTitle: true,
+            actions: [
+              IconButton(
+                icon: Icon(Icons.edit, color: Styles.highlightColor),
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Edit profile feature coming soon!'),
+                      backgroundColor: Styles.highlightColor,
+                      behavior: SnackBarBehavior.floating,
                     ),
-                    child: Column(
-                      children: [
-                        // Profile image
-                        Container(
-                          width: 100,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
+                  );
+                },
+              ),
+            ],
+          ),
+          body: SafeArea(
+            child: ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                // Profile header
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Styles.highlightColor,
+                        Styles.highlightColor.withOpacity(0.8),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Styles.highlightColor.withOpacity(0.3),
+                        blurRadius: 15,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      // Profile image
+                      Container(
+                        width: 100,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                          border: Border.all(
                             color: Colors.white,
-                            border: Border.all(
-                              color: Colors.white,
-                              width: 4,
-                            ),
+                            width: 4,
                           ),
-                          child: userData['profileImageUrl'] != null
-                              ? ClipOval(
-                                  child: Image.network(
-                                    userData['profileImageUrl'],
-                                    fit: BoxFit.cover,
-                                  ),
-                                )
-                              : Icon(
-                                  Icons.person,
-                                  size: 50,
-                                  color: Styles.highlightColor,
-                                ),
                         ),
-                        const Gap(15),
-                        // Name
-                        Text(
-                          userData['name'],
+                        child: user.photoURL != null
+                            ? ClipOval(
+                                child: Image.network(
+                                  user.photoURL ?? '',
+                                  fit: BoxFit.cover,
+                                ),
+                              )
+                            : Icon(
+                                Icons.person,
+                                size: 50,
+                                color: Styles.highlightColor,
+                              ),
+                      ),
+                      const Gap(15),
+                      // Name
+                      Text(
+                        user.name ?? '-',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const Gap(5),
+                      // Email
+                      Text(
+                        user.email ?? '-',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                      const Gap(5),
+                      // Role badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.3),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          user.role != null ? user.role!.toUpperCase() : '',
                           style: const TextStyle(
-                            fontSize: 24,
+                            fontSize: 12,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
                         ),
-                        const Gap(5),
-                        // Email
-                        Text(
-                          userData['email'],
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.white.withOpacity(0.9),
-                          ),
-                        ),
-                        const Gap(5),
-                        // Role badge
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.3),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            userData['role'].toString().toUpperCase(),
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const Gap(25),
-
-                  // Stats cards
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatCard(
-                          'Total Bookings',
-                          userData['totalBookings'].toString(),
-                          Icons.calendar_today,
-                          Colors.blue,
-                        ),
-                      ),
-                      const Gap(15),
-                      Expanded(
-                        child: _buildStatCard(
-                          'Active Pets',
-                          userData['activePets'].toString(),
-                          Icons.pets,
-                          Colors.orange,
-                        ),
                       ),
                     ],
                   ),
-
-                  const Gap(25),
-
-                  // Account Information
-                  Text(
-                    'Account Information',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Styles.blackColor,
-                    ),
-                  ),
-                  const Gap(15),
-
-                  _buildInfoCard(
-                    icon: Icons.phone,
-                    title: 'Phone Number',
-                    value: userData['phone'],
-                    onTap: () {},
-                  ),
-                  const Gap(12),
-
-                  _buildInfoCard(
-                    icon: Icons.cake,
-                    title: 'Member Since',
-                    value: userData['memberSince'],
-                    onTap: null,
-                  ),
-
-                  const Gap(25),
-
-                  // Settings Section
-                  Text(
-                    'Settings',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Styles.blackColor,
-                    ),
-                  ),
-                  const Gap(15),
-
-                  _buildSettingsOption(
-                    icon: Icons.pets,
-                    title: 'My Pets',
-                    subtitle: 'Manage your pets',
-                    onTap: () {
-                      // Navigate to pets management page
-                    },
-                  ),
-                  const Gap(12),
-
-                  _buildSettingsOption(
-                    icon: Icons.history,
-                    title: 'Booking History',
-                    subtitle: 'View past bookings',
-                    onTap: () {
-                      // Navigate to booking history
-                    },
-                  ),
-                  const Gap(12),
-
-                  _buildSettingsOption(
-                    icon: Icons.notifications,
-                    title: 'Notifications',
-                    subtitle: 'Manage notification preferences',
-                    onTap: () {
-                      // Navigate to notification settings
-                    },
-                  ),
-                  const Gap(12),
-
-                  _buildSettingsOption(
-                    icon: Icons.lock,
-                    title: 'Privacy & Security',
-                    subtitle: 'Manage your privacy settings',
-                    onTap: () {
-                      // Navigate to privacy settings
-                    },
-                  ),
-                  const Gap(12),
-
-                  _buildSettingsOption(
-                    icon: Icons.help_outline,
-                    title: 'Help & Support',
-                    subtitle: 'Get help or contact us',
-                    onTap: () {
-                      // Navigate to help page
-                    },
-                  ),
-
-                  const Gap(30),
-
-                  // Sign out button
-                  OutlinedButton.icon(
-                    onPressed: _handleSignOut,
-                    icon: const Icon(Icons.logout),
-                    label: const Text('Sign Out'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      side: const BorderSide(color: Colors.red, width: 2),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                ),
+        
+                const Gap(25),
+        
+                // Stats cards
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildStatCard(
+                        'Total Bookings',
+                        bookingList.length.toString(),
+                        Icons.calendar_today,
+                        Colors.blue,
                       ),
                     ),
-                  ),
-
-                  const Gap(15),
-
-                  // App version
-                  Center(
-                    child: Text(
-                      'PawGoda v1.0.0',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Styles.blackColor.withOpacity(0.5),
+                    const Gap(15),
+                    Expanded(
+                      child: _buildStatCard(
+                        'Active Pets',
+                        petList.length.toString(),
+                        Icons.pets,
+                        Colors.orange,
                       ),
                     ),
+                  ],
+                ),
+        
+                const Gap(25),
+        
+                // Account Information
+                Text(
+                  'Account Information',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Styles.blackColor,
                   ),
-
-                  const Gap(20),
-                ],
-              ),
-      ),
+                ),
+                const Gap(15),
+        
+                _buildInfoCard(
+                  icon: Icons.phone,
+                  title: 'Phone Number',
+                  value: user.phoneNumber ?? '-',
+                  onTap: () {},
+                ),
+                const Gap(12),
+        
+                _buildInfoCard(
+                  icon: Icons.cake,
+                  title: 'Member Since',
+                  value: user.createdAt ?? '-',
+                  onTap: null,
+                ),
+        
+                const Gap(25),
+        
+                // Settings Section
+                Text(
+                  'Settings',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Styles.blackColor,
+                  ),
+                ),
+                const Gap(15),
+        
+                _buildSettingsOption(
+                  icon: Icons.pets,
+                  title: 'My Pets',
+                  subtitle: 'Manage your pets',
+                  onTap: () {
+                    // Navigate to pets management page
+                  },
+                ),
+                const Gap(12),
+        
+                _buildSettingsOption(
+                  icon: Icons.history,
+                  title: 'Booking History',
+                  subtitle: 'View past bookings',
+                  onTap: () {
+                    // Navigate to booking history
+                  },
+                ),
+                const Gap(12),
+        
+                _buildSettingsOption(
+                  icon: Icons.notifications,
+                  title: 'Notifications',
+                  subtitle: 'Manage notification preferences',
+                  onTap: () {
+                    // Navigate to notification settings
+                  },
+                ),
+                const Gap(12),
+        
+                _buildSettingsOption(
+                  icon: Icons.lock,
+                  title: 'Privacy & Security',
+                  subtitle: 'Manage your privacy settings',
+                  onTap: () {
+                    // Navigate to privacy settings
+                  },
+                ),
+                const Gap(12),
+        
+                _buildSettingsOption(
+                  icon: Icons.help_outline,
+                  title: 'Help & Support',
+                  subtitle: 'Get help or contact us',
+                  onTap: () {
+                    // Navigate to help page
+                  },
+                ),
+        
+                const Gap(30),
+        
+                // Sign out button
+                OutlinedButton.icon(
+                  onPressed: _logout,
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Sign Out'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    side: const BorderSide(color: Colors.red, width: 2),
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+        
+                const Gap(15),
+        
+                // App version
+                Center(
+                  child: Text(
+                    'PawGoda v1.0.0',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Styles.blackColor.withOpacity(0.5),
+                    ),
+                  ),
+                ),
+        
+                const Gap(20),
+              ],
+            ),
+          ),
+        );
+      }
     );
   }
 

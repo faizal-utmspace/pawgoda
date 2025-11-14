@@ -8,7 +8,6 @@ import 'package:pawgoda/utils/styles.dart';
 import 'package:pawgoda/widgets/list_card.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({Key? key}) : super(key: key);
@@ -64,22 +63,11 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
-    _loadCachedUser();
     _googleSignIn.onCurrentUserChanged.listen((GoogleSignInAccount? account) {
       setState(() => _currentUser = account);
       if (account != null) _loadProfileList();
     });
     _googleSignIn.signInSilently();
-  }
-
-  /// Load cached user data from local storage
-  Future<void> _loadCachedUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      cachedName = prefs.getString('name');
-      cachedEmail = prefs.getString('email');
-      cachedPhotoURL = prefs.getString('photoURL');
-    });
   }
 
   /// Save user data to Firestore
@@ -94,25 +82,6 @@ class _ProfilePageState extends State<ProfilePage> {
       'photoURL': user.photoURL,
       'lastLogin': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
-  }
-
-  /// Save user data locally
-  Future<void> saveUserLocally(User? user) async {
-    if (user == null) return;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('uid', user.uid);
-    await prefs.setString('name', user.displayName ?? '');
-    await prefs.setString('email', user.email ?? '');
-    await prefs.setString('photoURL', user.photoURL ?? '');
-  }
-
-  /// Clear local user data
-  Future<void> clearLocalUser() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('uid');
-    await prefs.remove('name');
-    await prefs.remove('email');
-    await prefs.remove('photoURL');
   }
 
   /// Handle Google Sign-In
@@ -133,7 +102,6 @@ class _ProfilePageState extends State<ProfilePage> {
           await FirebaseAuth.instance.signInWithCredential(credential);
 
       await saveUserToFirestore(userCredential.user);
-      await saveUserLocally(userCredential.user);
 
       debugPrint('Google Sign-In successful: ${userCredential.user?.email}');
       setState(() {
@@ -153,7 +121,6 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _handleLogout() async {
     await _googleSignIn.signOut();
     await FirebaseAuth.instance.signOut();
-    await clearLocalUser();
 
     setState(() {
       _items.clear();

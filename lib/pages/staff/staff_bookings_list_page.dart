@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
-import '../utils/styles.dart';
+import 'package:pawgoda/utils/styles.dart';
 import 'staff_activity_management_page.dart';
 
 /// Staff Bookings List Page
