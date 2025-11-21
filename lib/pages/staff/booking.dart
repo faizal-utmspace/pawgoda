@@ -1,75 +1,111 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
+import 'package:pawgoda/utils/helpers.dart';
 import 'package:pawgoda/utils/styles.dart';
 import 'staff_activity_management_page.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Staff Bookings List Page
 /// Shows all active bookings for staff to manage activities
-class StaffBookingsListPage extends StatefulWidget {
-  const StaffBookingsListPage({Key? key}) : super(key: key);
+class StaffBookingPage extends StatefulWidget {
+  const StaffBookingPage({Key? key}) : super(key: key);
 
   @override
-  State<StaffBookingsListPage> createState() => _StaffBookingsListPageState();
+  State<StaffBookingPage> createState() => _StaffBookingPageState();
 }
 
-class _StaffBookingsListPageState extends State<StaffBookingsListPage> {
+class _StaffBookingPageState extends State<StaffBookingPage> {
   String selectedFilter = 'Active';
   final List<String> filters = ['All', 'Active', 'Completed'];
 
+  // Fetch bookings from Firestore
+    Future<void> _fetchBookings() async {
+      try {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('bookings')
+            .where('status', whereIn: ['Active', 'Completed'])
+            .get();
+
+            log('Snapshowt docs: ${snapshot.docs.length}');
+            log('Snapshot details: ${snapshot.docs.map((e) => e.data())}');
+
+        // Fetch activities for each booking
+        for (var doc in snapshot.docs) {
+          final bookingId = doc.data()['bookingId'] ?? doc.id;
+          final activitiesSnapshot = await FirebaseFirestore.instance
+              .collection('bookings')
+              .doc(bookingId)
+              .collection('activities')
+              .get();
+          
+          snapshot.docs.firstWhere((d) => d.id == doc.id).data()['activities'] = 
+            activitiesSnapshot.docs.map((aDoc) => aDoc.data()).toList();
+        }
+
+        setState(() {
+          bookings.clear();
+          bookings.addAll(
+            snapshot.docs.map((doc) {
+              final data = doc.data();
+              return {
+                'bookingId': data['bookingId'] ?? doc.id,
+                'petName': data['petName'] ?? '',
+                'petType': data['petType'] ?? '',
+                'customerName': data['customerName'] ?? '',
+                'serviceType': data['serviceType'] ?? '',
+                'package': data['package'],
+                'checkInDate': data['startDate'] != null 
+                  ? convertDate((data['startDate'] as Timestamp))
+                  : '',
+                'checkOutDate': data['endDate'] != null
+                  ? convertDate((data['endDate'] as Timestamp))
+                  : null,
+                'status': data['status'] ?? 'Active',
+                'activities': data['activities'] ?? [],
+                'selectedActivities': List<String>.from(data['selectedActivities'] ?? []),
+                'pendingActivities': data['pendingActivities'] ?? 0,
+                'completedActivities': data['completedActivities'] ?? 0,
+                'color': _getColorForPetType(data['petType'] ?? ''),
+              };
+            }).toList(),
+          );
+        });
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error fetching bookings: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+
+    Color _getColorForPetType(String petType) {
+      switch (petType.toLowerCase()) {
+        case 'dog':
+          return Colors.orange;
+        case 'cat':
+          return Colors.blue;
+        default:
+          return Colors.green;
+      }
+    }
+
+    @override
+    void initState() {
+      super.initState();
+      _fetchBookings();
+    }
   // Mock bookings data (in real app, fetch from Firebase based on staff role)
-  final List<Map<String, dynamic>> staffBookings = [
-    {
-      'bookingId': 'PG1234567',
-      'petName': 'Max',
-      'petType': 'Cat',
-      'customerName': 'Afi',
-      'serviceType': 'Hotel Accommodation',
-      'package': 'Deluxe',
-      'checkInDate': 'Nov 9, 2025',
-      'checkOutDate': 'Nov 15, 2025',
-      'status': 'Active',
-      'selectedActivities': ['Feeding', 'Walking', 'Playtime'],
-      'pendingActivities': 8,
-      'completedActivities': 4,
-      'color': Colors.blue,
-    },
-    {
-      'bookingId': 'PG1234568',
-      'petName': 'Bella',
-      'petType': 'Dog',
-      'customerName': 'Edda',
-      'serviceType': 'Daycare',
-      'package': null,
-      'checkInDate': 'Nov 9, 2025',
-      'checkOutDate': null,
-      'status': 'Active',
-      'selectedActivities': ['Feeding', 'Playtime'],
-      'pendingActivities': 3,
-      'completedActivities': 1,
-      'color': Colors.orange,
-    },
-    {
-      'bookingId': 'PG1234569',
-      'petName': 'Charlie',
-      'petType': 'Cat',
-      'customerName': 'Faizal',
-      'serviceType': 'Hotel Accommodation',
-      'package': 'VIP',
-      'checkInDate': 'Nov 5, 2025',
-      'checkOutDate': 'Nov 8, 2025',
-      'status': 'Completed',
-      'selectedActivities': ['Feeding', 'Walking', 'Playtime', 'Medication'],
-      'pendingActivities': 0,
-      'completedActivities': 12,
-      'color': Colors.green,
-    },
-  ];
+  final List<Map<String, dynamic>> bookings = [];
 
   List<Map<String, dynamic>> get filteredBookings {
     if (selectedFilter == 'All') {
-      return staffBookings;
+      return bookings;
     }
-    return staffBookings
+    return bookings
         .where((booking) => booking['status'] == selectedFilter)
         .toList();
   }
@@ -81,7 +117,7 @@ class _StaffBookingsListPageState extends State<StaffBookingsListPage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Text(
-          'Manage Bookings',
+          'Bookings',
           style: TextStyle(
             color: Styles.blackColor,
             fontWeight: FontWeight.bold,
@@ -108,96 +144,6 @@ class _StaffBookingsListPageState extends State<StaffBookingsListPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // Staff info card
-            Container(
-              margin: const EdgeInsets.all(20),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Styles.highlightColor.withOpacity(0.1),
-                    Styles.highlightColor.withOpacity(0.05),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(
-                  color: Styles.highlightColor.withOpacity(0.3),
-                  width: 1.5,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Styles.highlightColor.withOpacity(0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.admin_panel_settings,
-                      color: Styles.highlightColor,
-                      size: 28,
-                    ),
-                  ),
-                  const Gap(15),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Staff Dashboard',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Styles.blackColor,
-                          ),
-                        ),
-                        Text(
-                          '${filteredBookings.length} ${selectedFilter.toLowerCase()} bookings',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Styles.blackColor.withOpacity(0.6),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Colors.green,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const Gap(6),
-                        const Text(
-                          'On Duty',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.green,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
             // Filter chips
             Container(
               height: 50,
@@ -217,7 +163,6 @@ class _StaffBookingsListPageState extends State<StaffBookingsListPage> {
                         selectedFilter = filter;
                       });
                     },
-                    backgroundColor: Styles.bgColor,
                     selectedColor: Styles.highlightColor.withOpacity(0.2),
                     checkmarkColor: Styles.highlightColor,
                     labelStyle: TextStyle(
@@ -286,7 +231,7 @@ class _StaffBookingsListPageState extends State<StaffBookingsListPage> {
                         bookingId: booking['bookingId'],
                         petName: booking['petName'],
                         selectedActivities: List<String>.from(
-                          booking['selectedActivities'],
+                          booking['activities'],
                         ),
                       ),
                     ),
@@ -359,8 +304,6 @@ class _StaffBookingsListPageState extends State<StaffBookingsListPage> {
                   ],
                 ),
 
-                const Gap(12),
-                Divider(color: Colors.grey.shade300),
                 const Gap(12),
 
                 // Booking details
@@ -439,83 +382,6 @@ class _StaffBookingsListPageState extends State<StaffBookingsListPage> {
                     ],
                   ],
                 ),
-
-                const Gap(10),
-
-                // Booking ID
-                Row(
-                  children: [
-                    Icon(
-                      Icons.confirmation_number,
-                      size: 16,
-                      color: Styles.highlightColor,
-                    ),
-                    const Gap(8),
-                    Text(
-                      booking['bookingId'],
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Styles.blackColor.withOpacity(0.5),
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
-                ),
-
-                if (isActive) ...[
-                  const Gap(12),
-                  Divider(color: Colors.grey.shade300),
-                  const Gap(12),
-
-                  // Activity stats
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatChip(
-                          'Pending',
-                          pendingCount.toString(),
-                          Colors.orange,
-                        ),
-                      ),
-                      const Gap(10),
-                      Expanded(
-                        child: _buildStatChip(
-                          'Completed',
-                          booking['completedActivities'].toString(),
-                          Colors.green,
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const Gap(12),
-
-                  // Action button
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.touch_app,
-                        size: 16,
-                        color: Styles.highlightColor,
-                      ),
-                      const Gap(8),
-                      Text(
-                        'Tap to manage activities',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Styles.highlightColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const Spacer(),
-                      Icon(
-                        Icons.arrow_forward_ios,
-                        size: 14,
-                        color: Styles.highlightColor,
-                      ),
-                    ],
-                  ),
-                ],
               ],
             ),
           ),

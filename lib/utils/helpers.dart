@@ -18,3 +18,8 @@ Future<user_model.User?> getCurrentUserData() async {
 
   return user_model.User.fromJson(doc.data()!); // This will include role, createdAt, etc.
 }
+
+String convertDate(Timestamp timestamp) {
+  final dateTime = timestamp.toDate();
+  return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+}

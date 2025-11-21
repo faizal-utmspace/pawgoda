@@ -1,8 +1,10 @@
+import 'package:pawgoda/pages/staff/activity.dart';
 import 'package:pawgoda/pages/staff_activity_management_page.dart';
-import 'package:pawgoda/pages/staff_bookings_list_page.dart';
+import 'package:pawgoda/pages/staff/booking.dart';
 import 'package:pawgoda/pages/user_profile_page.dart';
 import 'package:pawgoda/pages/ai_chatbot_page.dart';
 import 'package:pawgoda/pages/booking_page.dart';
+import 'package:pawgoda/pages/staff/activity.dart';
 import 'package:pawgoda/utils/styles.dart';
 import 'package:pawgoda/widgets/animated_title.dart';
 import 'package:pawgoda/widgets/pet_card.dart';
@@ -22,11 +24,17 @@ class _HomeStaffPageState extends State<HomeStaffPage> {
   int _currentIndex = 0;
 
   final List<Map<String, dynamic>> navItems = [
+        {
+      'text': 'Activities', 
+      'icon': 'assets/nav_icons/notification_list_icon.svg', 
+      'page': const ActivityPage()
+    },
     {
       'text': 'Bookings', 
-      'icon': 'assets/nav_icons/hotel_icon.svg', 
-      'page': const StaffBookingsListPage()
+      'icon': 'assets/nav_icons/booking.svg', 
+      'page': const StaffBookingPage()
     },
+
     {
       'text': 'Profile', 
       'icon': 'assets/nav_icons/profile_icon.svg', 
