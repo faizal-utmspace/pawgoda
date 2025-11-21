@@ -1,5 +1,6 @@
 import 'dart:developer';
 
+import 'package:pawgoda/keys.dart';
 import 'package:pawgoda/pages/get_started.dart';
 import 'package:pawgoda/pages/home.dart';
 import 'package:pawgoda/pages/homepet.dart';
@@ -11,12 +12,19 @@ import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:pawgoda/pages/payment_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  //Stripe key
+  Stripe.publishableKey = StripePublisableKey;
+  await Stripe.instance.applySettings();
 
   // Initialize for web
   if (Firebase.apps.isNotEmpty) {
@@ -50,7 +58,12 @@ class MyApp extends StatelessWidget {
           colorScheme:
               ColorScheme.fromSwatch().copyWith(primary: Styles.blackColor)),
       // home: const GetStarted(),
-      home: const AuthGate(),
+      home: PaymentPage(
+        bookingId: 'TEST123',
+        serviceName: 'Hotel',
+        petName: 'Buddy',
+        amount: 350.00,
+      ),
     );
   }
 }

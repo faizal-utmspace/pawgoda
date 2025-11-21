@@ -1,6 +1,12 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:gap/gap.dart';
+import '../keys.dart';
 import '../utils/styles.dart';
+import 'package:http/http.dart' as http;
 
 class PaymentPage extends StatefulWidget {
   final String bookingId;
@@ -175,18 +181,19 @@ class _PaymentPageState extends State<PaymentPage> {
             const Gap(30),
 
             // Payment Details Form
-            if (selectedPaymentMethod == 'credit_card') ...[
-              Text(
-                'Card Details',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Styles.blackColor,
-                ),
-              ),
-              const Gap(15),
-              _buildCardForm(),
-            ] else if (selectedPaymentMethod == 'digital_wallet') ...[
+            // if (selectedPaymentMethod == 'credit_card') ...[
+            //   Text(
+            //     'Card Details',
+            //     style: TextStyle(
+            //       fontSize: 18,
+            //       fontWeight: FontWeight.bold,
+            //       color: Styles.blackColor,
+            //     ),
+            //   ),
+            //   const Gap(15),
+            //   _buildCardForm(),
+            // ] else
+              if (selectedPaymentMethod == 'digital_wallet') ...[
               _buildDigitalWalletOptions(),
             ] else ...[
               _buildBankTransferInfo(),
@@ -196,7 +203,14 @@ class _PaymentPageState extends State<PaymentPage> {
 
             // Pay Now Button
             ElevatedButton(
-              onPressed: _processPayment,
+              // onPressed: _processPayment,
+              onPressed: ()
+              {
+                paymentSheetInitialization(
+                  totalAmount.round().toString(),
+                  "MYR",
+                );
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Styles.highlightColor,
                 foregroundColor: Colors.white,
@@ -524,6 +538,98 @@ class _PaymentPageState extends State<PaymentPage> {
         ),
       ],
     );
+  }
+
+  Map<String, dynamic>? intentPaymentData;
+
+  paymentSheetInitialization(amountToBeCharge,currency) async{
+    try {
+      intentPaymentData = await makeIntentForPayment(amountToBeCharge,currency);
+
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          allowsDelayedPaymentMethods: true,
+          paymentIntentClientSecret: intentPaymentData!['client_secret'],
+          style: ThemeMode.dark,
+          merchantDisplayName: "Pawgoda"
+        )
+      ).then((val)
+      {
+        print(val);
+      });
+
+      showPaymentSheet();
+
+    }catch (errorMsg,s){
+      if(kDebugMode){
+        print(s);
+      }
+
+      print(errorMsg.toString());
+    }
+  }
+
+  makeIntentForPayment(amountToBeCharge,currency) async {
+    try {
+      Map<String, dynamic>? paymentInfo =
+          {
+            "amount": (int.parse(amountToBeCharge) * 100).toString(),
+            "currency": currency,
+            "payment_method_types[]": "card"
+          };
+
+      var responseStripe = await http.post(
+        Uri.parse("https://api.stripe.com/v1/payment_intents"),
+        body: paymentInfo,
+        headers:
+          {
+            "Authorization": "Bearer $StripeSecretKey",
+            "Content-Type": "application/x-www-form-urlencoded"
+          }
+      );
+
+      print("response from API = " + responseStripe.body);
+      
+      return jsonDecode(responseStripe.body);
+    } catch (errorMsg) {
+      if(kDebugMode){
+        print(errorMsg.toString());
+      }
+
+      print(errorMsg.toString());
+    }
+
+  }
+
+  showPaymentSheet() async {
+    try {
+      await Stripe.instance.presentPaymentSheet().then((val){
+        intentPaymentData = null;
+      }).onError((errorMsg,sTrace){
+        if(kDebugMode){
+          print(errorMsg.toString() + sTrace.toString());
+        }
+      });
+    }
+    on StripeException catch(error) {
+      if(kDebugMode){
+        print(error);
+      }
+      
+      showDialog(
+          context: context, 
+          builder: (c) => const AlertDialog(
+            content: Text("cancelled"),
+          )
+      );
+    }
+    catch (errorMsg, s) {
+      if(kDebugMode){
+        print(s);
+      }
+
+      print(errorMsg.toString());
+    }
   }
 
   void _processPayment() {
