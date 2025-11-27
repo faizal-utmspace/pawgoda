@@ -58,12 +58,7 @@ class MyApp extends StatelessWidget {
           colorScheme:
               ColorScheme.fromSwatch().copyWith(primary: Styles.blackColor)),
       // home: const GetStarted(),
-      home: PaymentPage(
-        bookingId: 'TEST123',
-        serviceName: 'Hotel',
-        petName: 'Buddy',
-        amount: 350.00,
-      ),
+      home: const AuthGate(),
     );
   }
 }
