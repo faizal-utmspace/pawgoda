@@ -1,5 +1,6 @@
 import 'package:pawgoda/pages/gmail.dart';
 import 'package:pawgoda/pages/home.dart';
+import 'package:pawgoda/pages/login_page.dart';
 import 'package:pawgoda/utils/layouts.dart';
 import 'package:pawgoda/utils/styles.dart';
 import 'package:flutter/material.dart';
@@ -52,7 +53,7 @@ class GetStarted extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: () {
                     Navigator.push(
-                        context, MaterialPageRoute(builder: (_) => const GmailLogin()));
+                        context, MaterialPageRoute(builder: (_) => const LoginPage()));
                   },
                   style: ElevatedButton.styleFrom(
                     elevation: 0,

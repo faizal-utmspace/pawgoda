@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:intl/intl.dart';
 import '../utils/styles.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'view_updates_page.dart'; // Import the view updates page
 
 class CustomerActivityTrackingPage extends StatefulWidget {
   final String bookingId;
@@ -21,51 +23,87 @@ class CustomerActivityTrackingPage extends StatefulWidget {
 
 class _CustomerActivityTrackingPageState extends State<CustomerActivityTrackingPage> {
   String selectedFilter = 'All';
-  final List<String> filters = ['All', 'Completed', 'Pending'];
+  final List<String> filters = ['All', 'Completed', 'Pending', 'In Progress'];
+  List<Map<String, dynamic>> activityUpdates = [];
+  bool isLoading = true;
 
-  // Mock activity updates (in real app, this would come from Firebase)
-  final List<Map<String, dynamic>> activityUpdates = [
-    {
-      'activityName': 'Feeding',
-      'date': '2025-11-09',
-      'time': '08:30 AM',
-      'status': 'Completed',
-      'note': 'Max enjoyed breakfast! Ate all the kibbles and drank water.',
-      'imageUrl': 'https://example.com/feeding1.jpg', // In real app, Firebase Storage URL
-      'staffName': 'Ewan',
-      'timestamp': DateTime(2025, 11, 9, 8, 30),
-    },
-    {
-      'activityName': 'Walking',
-      'date': '2025-11-09',
-      'time': '10:00 AM',
-      'status': 'Completed',
-      'note': '30 minutes walk in the park. Max was very energetic and playful!',
-      'imageUrl': 'https://example.com/walking1.jpg',
-      'staffName': 'Ewan',
-      'timestamp': DateTime(2025, 11, 9, 10, 0),
-    },
-    {
-      'activityName': 'Playtime',
-      'date': '2025-11-09',
-      'time': '02:00 PM',
-      'status': 'Completed',
-      'note': 'Had fun playing fetch and with other pets in the play area.',
-      'imageUrl': 'https://example.com/playtime1.jpg',
-      'staffName': 'Hadi',
-      'timestamp': DateTime(2025, 11, 9, 14, 0),
-    },
-    {
-      'activityName': 'Feeding',
-      'date': '2025-11-09',
-      'time': '06:00 PM',
-      'status': 'Pending',
-      'note': null,
-      'imageUrl': null,
-      'staffName': null,
-      'timestamp': DateTime(2025, 11, 9, 18, 0),
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadActivities();
+  }
+
+  Future<void> _loadActivities() async {
+    setState(() {
+      isLoading = true;
+    });
+
+    try {
+      final activitiesSnapshot = await FirebaseFirestore.instance
+          .collection('bookings')
+          .doc(widget.bookingId)
+          .collection('activities')
+          .orderBy('date', descending: false)
+          .get();
+
+      setState(() {
+        activityUpdates = activitiesSnapshot.docs.map((doc) {
+          final data = doc.data();
+          
+          // Parse timestamp
+          DateTime? timestamp;
+          try {
+            final dateStr = data['date'] ?? '';
+            if (dateStr.isNotEmpty) {
+              timestamp = DateFormat('yyyy-MM-dd').parse(dateStr);
+            }
+          } catch (e) {
+            timestamp = DateTime.now();
+          }
+
+          // Get updates array
+          final updates = data['updates'] as List<dynamic>? ?? [];
+          
+          // Count updates with media
+          int mediaCount = 0;
+          for (var update in updates) {
+            final mediaUrl = update['mediaUrl'] as String?;
+            if (mediaUrl != null && mediaUrl.isNotEmpty && mediaUrl != 'null') {
+              mediaCount++;
+            }
+          }
+
+          return {
+            'id': doc.id,
+            'activityName': data['activityName'] ?? '',
+            'date': data['date'] ?? '',
+            'time': data['time'] ?? '',
+            'status': data['status'] ?? 'Pending',
+            'note': data['note'] ?? '',
+            'imageUrl': data['imageUrl'] ?? '',
+            'updatedBy': data['updatedBy'] ?? '',
+            'timestamp': timestamp,
+            'updates': updates,
+            'updateCount': updates.length,
+            'mediaCount': mediaCount,
+          };
+        }).toList();
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading activities: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
 
   List<Map<String, dynamic>> get filteredUpdates {
     if (selectedFilter == 'All') {
@@ -128,7 +166,7 @@ class _CustomerActivityTrackingPageState extends State<CustomerActivityTrackingP
           IconButton(
             icon: Icon(Icons.refresh, color: Styles.highlightColor),
             onPressed: () {
-              setState(() {});
+              _loadActivities();
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: const Text('Updates refreshed'),
@@ -141,377 +179,515 @@ class _CustomerActivityTrackingPageState extends State<CustomerActivityTrackingP
           ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Header card
-            Container(
-              margin: const EdgeInsets.all(20),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Styles.highlightColor.withOpacity(0.1),
-                    Styles.highlightColor.withOpacity(0.05),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(
-                  color: Styles.highlightColor.withOpacity(0.3),
-                  width: 1.5,
-                ),
+      body: isLoading
+          ? Center(
+              child: CircularProgressIndicator(
+                color: Styles.highlightColor,
               ),
+            )
+          : SafeArea(
               child: Column(
                 children: [
-                  Row(
-                    children: [
-                      Icon(Icons.pets, color: Styles.highlightColor, size: 24),
-                      const Gap(10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                  // Header card
+                  Container(
+                    margin: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Styles.highlightColor.withOpacity(0.1),
+                          Styles.highlightColor.withOpacity(0.05),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: Styles.highlightColor.withOpacity(0.3),
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
                           children: [
-                            Text(
-                              widget.petName,
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Styles.blackColor,
+                            Icon(Icons.pets, color: Styles.highlightColor, size: 24),
+                            const Gap(10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.petName,
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Styles.blackColor,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Booking ID: ${widget.bookingId.substring(0, 8)}...',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Styles.blackColor.withOpacity(0.6),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            Text(
-                              'Booking ID: ${widget.bookingId}',
-                              style: TextStyle(
-                                fontSize: 12,
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.green.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: const BoxDecoration(
+                                      color: Colors.green,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const Gap(6),
+                                  const Text(
+                                    'Active',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.green,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Gap(12),
+                        Divider(color: Colors.grey.shade300),
+                        const Gap(12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            _buildStatItem(
+                              Icons.event_note,
+                              '${activityUpdates.length}',
+                              'Activities',
+                            ),
+                            Container(
+                              width: 1,
+                              height: 30,
+                              color: Colors.grey.shade300,
+                            ),
+                            _buildStatItem(
+                              Icons.check_circle,
+                              '${activityUpdates.where((a) => a['status'] == 'Completed').length}',
+                              'Completed',
+                            ),
+                            Container(
+                              width: 1,
+                              height: 30,
+                              color: Colors.grey.shade300,
+                            ),
+                            _buildStatItem(
+                              Icons.photo_camera,
+                              '${activityUpdates.fold<int>(0, (sum, a) => sum + (a['mediaCount'] as int? ?? 0))}',
+                              'Photos',
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Filter chips
+                  Container(
+                    height: 50,
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: filters.length,
+                      separatorBuilder: (context, index) => const Gap(10),
+                      itemBuilder: (context, index) {
+                        final filter = filters[index];
+                        final isSelected = selectedFilter == filter;
+                        return FilterChip(
+                          label: Text(filter),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            setState(() {
+                              selectedFilter = filter;
+                            });
+                          },
+                          selectedColor: Styles.highlightColor.withOpacity(0.2),
+                          checkmarkColor: Styles.highlightColor,
+                          labelStyle: TextStyle(
+                            color: isSelected
+                                ? Styles.highlightColor
+                                : Styles.blackColor,
+                            fontWeight:
+                                isSelected ? FontWeight.bold : FontWeight.normal,
+                          ),
+                          side: BorderSide(
+                            color: isSelected
+                                ? Styles.highlightColor
+                                : Colors.grey.shade300,
+                            width: 1.5,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+
+                  const Gap(10),
+
+                  // Activities list
+                  Expanded(
+                    child: filteredUpdates.isEmpty
+                        ? _buildEmptyState()
+                        : RefreshIndicator(
+                            color: Styles.highlightColor,
+                            onRefresh: _loadActivities,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.all(20),
+                              itemCount: filteredUpdates.length,
+                              separatorBuilder: (context, index) => const Gap(15),
+                              itemBuilder: (context, index) {
+                                final update = filteredUpdates[index];
+                                return _buildActivityCard(update);
+                              },
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  Widget _buildStatItem(IconData icon, String value, String label) {
+    return Column(
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 16, color: Styles.highlightColor),
+            const Gap(6),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Styles.blackColor,
+              ),
+            ),
+          ],
+        ),
+        const Gap(4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: Styles.blackColor.withOpacity(0.6),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActivityCard(Map<String, dynamic> update) {
+    final status = update['status'] as String;
+    final isCompleted = status == 'Completed';
+    final activityColor = _getActivityColor(update['activityName']);
+    final activityIcon = _getActivityIcon(update['activityName']);
+    final updates = update['updates'] as List<dynamic>? ?? [];
+    final updateCount = update['updateCount'] as int? ?? 0;
+    final mediaCount = update['mediaCount'] as int? ?? 0;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: updateCount > 0
+              ? () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ViewUpdatesPage(
+                        bookingId: widget.bookingId,
+                        activityId: update['id'],
+                        activityName: update['activityName'],
+                      ),
+                    ),
+                  ).then((_) => _loadActivities());
+                }
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: activityColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        activityIcon,
+                        color: activityColor,
+                        size: 24,
+                      ),
+                    ),
+                    const Gap(12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            update['activityName'],
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Styles.blackColor,
+                            ),
+                          ),
+                          const Gap(2),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.calendar_today,
+                                size: 12,
                                 color: Styles.blackColor.withOpacity(0.6),
+                              ),
+                              const Gap(4),
+                              Text(
+                                update['date'],
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Styles.blackColor.withOpacity(0.6),
+                                ),
+                              ),
+                              const Gap(8),
+                              Icon(
+                                Icons.access_time,
+                                size: 12,
+                                color: Styles.blackColor.withOpacity(0.6),
+                              ),
+                              const Gap(4),
+                              Text(
+                                update['time'],
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Styles.blackColor.withOpacity(0.6),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isCompleted
+                            ? Colors.green.withOpacity(0.2)
+                            : status == 'In Progress'
+                                ? Colors.blue.withOpacity(0.2)
+                                : Colors.orange.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isCompleted
+                              ? Colors.green
+                              : status == 'In Progress'
+                                  ? Colors.blue
+                                  : Colors.orange,
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        status,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isCompleted
+                              ? Colors.green
+                              : status == 'In Progress'
+                                  ? Colors.blue
+                                  : Colors.orange,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Update info section
+                if (updateCount > 0) ...[
+                  const Gap(12),
+                  Divider(color: Colors.grey.shade300),
+                  const Gap(12),
+                  Row(
+                    children: [
+                      // Update count
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.update,
+                              size: 16,
+                              color: activityColor,
+                            ),
+                            const Gap(6),
+                            Text(
+                              '$updateCount update${updateCount != 1 ? 's' : ''}',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Styles.blackColor.withOpacity(0.8),
                               ),
                             ),
                           ],
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                      // Media count
+                      if (mediaCount > 0)
+                        Row(
                           children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: const BoxDecoration(
-                                color: Colors.green,
-                                shape: BoxShape.circle,
-                              ),
+                            Icon(
+                              Icons.photo_camera,
+                              size: 16,
+                              color: Colors.green,
                             ),
                             const Gap(6),
-                            const Text(
-                              'Active',
+                            Text(
+                              '$mediaCount photo${mediaCount != 1 ? 's' : ''}',
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w600,
                                 color: Colors.green,
                               ),
                             ),
                           ],
                         ),
+                      const Gap(12),
+                      // View button
+                      Icon(
+                        Icons.arrow_forward_ios,
+                        size: 14,
+                        color: activityColor,
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-
-            // Filter chips
-            Container(
-              height: 50,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: filters.length,
-                separatorBuilder: (context, index) => const Gap(10),
-                itemBuilder: (context, index) {
-                  final filter = filters[index];
-                  final isSelected = selectedFilter == filter;
-                  return FilterChip(
-                    label: Text(filter),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      setState(() {
-                        selectedFilter = filter;
-                      });
-                    },
-                    backgroundColor: Styles.bgColor,
-                    selectedColor: Styles.highlightColor.withOpacity(0.2),
-                    checkmarkColor: Styles.highlightColor,
-                    labelStyle: TextStyle(
-                      color: isSelected ? Styles.highlightColor : Styles.blackColor,
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    ),
-                    side: BorderSide(
-                      color: isSelected
-                          ? Styles.highlightColor
-                          : Colors.grey.shade300,
-                      width: 1.5,
-                    ),
-                  );
-                },
-              ),
-            ),
-
-            const Gap(10),
-
-            // Activity timeline
-            Expanded(
-              child: filteredUpdates.isEmpty
-                  ? _buildEmptyState()
-                  : ListView.separated(
-                      padding: const EdgeInsets.all(20),
-                      itemCount: filteredUpdates.length,
-                      separatorBuilder: (context, index) => const Gap(15),
-                      itemBuilder: (context, index) {
-                        final update = filteredUpdates[index];
-                        return _buildActivityUpdateCard(update);
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActivityUpdateCard(Map<String, dynamic> update) {
-    final status = update['status'] as String;
-    final isCompleted = status == 'Completed';
-    final activityColor = _getActivityColor(update['activityName']);
-    final activityIcon = _getActivityIcon(update['activityName']);
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Styles.bgColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isCompleted
-              ? activityColor.withOpacity(0.3)
-              : Colors.grey.shade300,
-          width: 1.5,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: activityColor.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    activityIcon,
-                    color: activityColor,
-                    size: 24,
-                  ),
-                ),
-                const Gap(12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        update['activityName'],
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Styles.blackColor,
-                        ),
-                      ),
-                      const Gap(2),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.access_time,
-                            size: 12,
-                            color: Styles.blackColor.withOpacity(0.6),
-                          ),
-                          const Gap(4),
-                          Text(
-                            '${update['date']} at ${update['time']}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Styles.blackColor.withOpacity(0.6),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isCompleted
-                        ? Colors.green.withOpacity(0.2)
-                        : Colors.orange.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    status,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: isCompleted ? Colors.green : Colors.orange,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Content (only for completed activities)
-          if (isCompleted) ...[
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Divider(color: Colors.grey.shade300),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Note
-                  if (update['note'] != null) ...[
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.notes,
-                          size: 16,
-                          color: Styles.highlightColor,
-                        ),
-                        const Gap(8),
-                        Expanded(
-                          child: Text(
-                            update['note'],
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Styles.blackColor.withOpacity(0.8),
-                              height: 1.4,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Gap(12),
-                  ],
-
-                  // Photo placeholder (in real app, display actual image)
-                  if (update['imageUrl'] != null) ...[
+                  const Gap(8),
+                  // Latest update preview
+                  if (updates.isNotEmpty) ...[
                     Container(
-                      height: 200,
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(12),
+                        color: activityColor.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                          color: Colors.grey.shade300,
+                          color: activityColor.withOpacity(0.15),
                           width: 1,
                         ),
                       ),
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.photo_camera,
-                              size: 48,
-                              color: Colors.grey.shade400,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Latest Update',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: activityColor,
+                              letterSpacing: 0.5,
                             ),
-                            const Gap(8),
-                            Text(
-                              'Photo uploaded by staff',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: Colors.grey.shade600,
-                              ),
+                          ),
+                          const Gap(6),
+                          Text(
+                            _getLatestUpdatePreview(updates),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Styles.blackColor.withOpacity(0.7),
+                              height: 1.4,
                             ),
-                            const Gap(4),
-                            Text(
-                              '(Image would be displayed here)',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey.shade500,
-                                fontStyle: FontStyle.italic,
-                              ),
-                            ),
-                          ],
-                        ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
                     ),
-                    const Gap(12),
                   ],
-
-                  // Staff info
-                  if (update['staffName'] != null)
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.person,
-                          size: 16,
-                          color: Styles.highlightColor,
-                        ),
-                        const Gap(8),
-                        Text(
-                          'Updated by ${update['staffName']}',
+                ] else ...[
+                  const Gap(12),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.schedule,
+                        size: 16,
+                        color: Colors.orange,
+                      ),
+                      const Gap(8),
+                      Expanded(
+                        child: Text(
+                          'Scheduled - waiting for staff update',
                           style: TextStyle(
                             fontSize: 12,
                             color: Styles.blackColor.withOpacity(0.6),
                             fontStyle: FontStyle.italic,
                           ),
                         ),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-          ] else ...[
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.schedule,
-                    size: 16,
-                    color: Colors.orange,
-                  ),
-                  const Gap(8),
-                  Text(
-                    'Scheduled - waiting for staff update',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Styles.blackColor.withOpacity(0.6),
-                      fontStyle: FontStyle.italic,
-                    ),
+                      ),
+                    ],
                   ),
                 ],
-              ),
+              ],
             ),
-          ],
-        ],
+          ),
+        ),
       ),
     );
+  }
+
+  String _getLatestUpdatePreview(List<dynamic> updates) {
+    if (updates.isEmpty) return 'No updates yet';
+    
+    final latest = updates.last as Map<String, dynamic>;
+    final remarks = latest['remarks'] as String? ?? '';
+    final mediaUrl = latest['mediaUrl'] as String?;
+    final hasMedia = mediaUrl != null && mediaUrl.isNotEmpty && mediaUrl != 'null';
+    
+    if (remarks.isNotEmpty) {
+      return remarks;
+    } else if (hasMedia) {
+      final isVideo = latest['isVideo'] as bool? ?? false;
+      return isVideo ? 'Video uploaded by staff' : 'Photo uploaded by staff';
+    }
+    
+    return 'Update posted by staff';
   }
 
   Widget _buildEmptyState() {
@@ -519,26 +695,38 @@ class _CustomerActivityTrackingPageState extends State<CustomerActivityTrackingP
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.event_busy,
-            size: 80,
-            color: Styles.highlightColor.withOpacity(0.3),
+          Container(
+            padding: const EdgeInsets.all(30),
+            decoration: BoxDecoration(
+              color: Styles.highlightColor.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.event_busy,
+              size: 80,
+              color: Styles.highlightColor.withOpacity(0.4),
+            ),
           ),
-          const Gap(20),
+          const Gap(24),
           Text(
             'No $selectedFilter Updates',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.bold,
-              color: Styles.blackColor,
+              color: Styles.blackColor.withOpacity(0.6),
             ),
           ),
           const Gap(10),
-          Text(
-            'Activity updates will appear here',
-            style: TextStyle(
-              fontSize: 14,
-              color: Styles.blackColor.withOpacity(0.6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+            child: Text(
+              'Activity updates will appear here',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Styles.blackColor.withOpacity(0.4),
+                height: 1.4,
+              ),
             ),
           ),
         ],

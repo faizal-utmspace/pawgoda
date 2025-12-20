@@ -80,10 +80,6 @@ class _StaffBookingsListPageState extends State<StaffBookingsListPage> {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios, color: Styles.highlightColor),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: Text(
           'Manage Bookings',
           style: TextStyle(

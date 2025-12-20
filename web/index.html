@@ -23,14 +23,51 @@
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="adoptme">
+  <meta name="apple-mobile-web-app-title" content="pawgoda">
+  <meta name="google-signin-client_id" content="980151251492-vegm8onmtimk2u6mljm55ef6ksh6o2s0.apps.googleusercontent.com" />
+
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>adoptme</title>
+  <title>pawgoda</title>
   <link rel="manifest" href="manifest.json">
+  <!-- Load Google's JavaScript client and Identity Services.
+       If your web app uses the GSI token client together with gapi.client
+       (for example to call Google APIs via gapi.client.request), the
+       gapi.client library must be available on the page before the token
+       is passed to it. Including these scripts in index.html ensures
+       they're present when Flutter bootstraps the app. -->
+  <script src="https://apis.google.com/js/api.js" async defer></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <script>
+    // Optional: load gapi.client early so it's ready for token use.
+    // If you don't use gapi.client, you can remove this. Keep it if
+    // your code calls gapi.client.* after sign-in.
+    (function initGapiClient() {
+      function whenGapiReady() {
+        if (window.gapi && window.gapi.load) {
+          try {
+            window.gapi.load('client', {
+              callback: function() {
+                // gapi.client loaded
+                console.log('gapi.client loaded');
+              },
+              onerror: function() { console.warn('Failed to load gapi.client'); },
+            });
+          } catch (e) {
+            console.warn('gapi.load error', e);
+          }
+        } else {
+          // Retry shortly until gapi is available
+          setTimeout(whenGapiReady, 50);
+        }
+      }
+      whenGapiReady();
+    })();
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>

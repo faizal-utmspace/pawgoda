@@ -3,6 +3,8 @@ import 'package:gap/gap.dart';
 import 'package:intl/intl.dart';
 import '../utils/styles.dart';
 import 'activity_selection_page.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class BookingPage extends StatefulWidget {
   final String petType;
@@ -15,23 +17,20 @@ class BookingPage extends StatefulWidget {
 
 class _BookingPageState extends State<BookingPage> {
   final _formKey = GlobalKey<FormState>();
-  final TextEditingController petNameController = TextEditingController();
-  final TextEditingController breedController = TextEditingController();
   final TextEditingController notesController = TextEditingController();
   DateTime? checkInDate;
   DateTime? checkOutDate;
-  TimeOfDay? checkInTime;
-  String? selectedService;
+  TimeOfDay checkInTime = TimeOfDay.now(); // Auto-set to current time
   String? selectedPackage; // For hotel accommodation
+  
+  // Pet selection from Firebase
+  String? selectedPetId;
+  String? selectedPetName;
+  String? selectedPetBreed;
+  List<Map<String, dynamic>> userPets = [];
 
-  // Service options
-  List<String> get availableServices {
-    final petType = widget.petType;
-    return [
-      '$petType Hotel Accommodation',
-      '$petType Daycare',
-    ];
-  }
+  // Only hotel accommodation service
+  String selectedService = '';
 
   // Hotel packages
   final List<Map<String, dynamic>> hotelPackages = [
@@ -58,11 +57,77 @@ class _BookingPageState extends State<BookingPage> {
     },
   ];
 
-  bool get isHotelAccommodation => 
-      selectedService?.contains('Hotel Accommodation') ?? false;
-  
-  bool get isDaycare => 
-      selectedService?.contains('Daycare') ?? false;
+  // Calculate total price based on days and package
+  double get totalPrice {
+    if (selectedPackage == null || checkInDate == null || checkOutDate == null) {
+      return 0.0;
+    }
+
+    final days = checkOutDate!.difference(checkInDate!).inDays;
+    if (days <= 0) return 0.0;
+
+    final packagePrice = hotelPackages.firstWhere(
+      (p) => p['name'] == selectedPackage,
+      orElse: () => hotelPackages[0],
+    )['price'] as double;
+
+    return packagePrice * days;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    selectedService = '${widget.petType} Hotel Accommodation';
+    _loadUserPets();
+  }
+
+  Future<void> _loadUserPets() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final petsSnapshot = await FirebaseFirestore.instance
+          .collection('pets')
+          .where('ownerId', isEqualTo: user.uid)
+          .where('type', isEqualTo: widget.petType)
+          .get();
+
+      setState(() {
+        userPets = petsSnapshot.docs.map((doc) {
+          final data = doc.data();
+          return {
+            'id': doc.id,
+            'name': data['name'] ?? 'Unknown',
+            'breed': data['breed'] ?? 'Unknown',
+            'type': data['type'] ?? 'Unknown',
+            'imageUrl': data['imageUrl'],
+          };
+        }).toList();
+
+        // Auto-select if only one pet
+        if (userPets.length == 1) {
+          selectedPetId = userPets[0]['id'];
+          selectedPetName = userPets[0]['name'];
+          selectedPetBreed = userPets[0]['breed'];
+        }
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading pets: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    notesController.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickDate(bool isCheckIn) async {
     final picked = await showDatePicker(
@@ -99,43 +164,15 @@ class _BookingPageState extends State<BookingPage> {
     }
   }
 
-  Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.now(),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: ColorScheme.light(
-              primary: Styles.highlightColor,
-              onPrimary: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null) {
-      setState(() {
-        checkInTime = picked;
-      });
-    }
-  }
-
   void _submitBooking() {
-    // Validation logic
+    // Validation logic - Hotel accommodation requires checkout date and package
     bool isValid = _formKey.currentState!.validate() &&
         checkInDate != null &&
-        checkInTime != null &&
-        selectedService != null;
-
-    // Additional validations based on service type
-    if (isHotelAccommodation) {
-      isValid = isValid && checkOutDate != null && selectedPackage != null;
-    } else if (isDaycare) {
-      // Daycare doesn't need checkout date or package
-      isValid = isValid;
-    }
+        checkOutDate != null &&
+        selectedPackage != null &&
+        selectedPetId != null &&
+        selectedPetName != null &&
+        selectedPetBreed != null;
 
     if (isValid) {
       // Generate booking ID
@@ -147,25 +184,38 @@ class _BookingPageState extends State<BookingPage> {
         MaterialPageRoute(
           builder: (_) => ActivitySelectionPage(
             petType: widget.petType,
-            serviceName: selectedService!,
+            serviceName: selectedService,
             checkInDate: checkInDate!,
             checkOutDate: checkOutDate,
-            checkInTime: checkInTime!,
+            checkInTime: checkInTime,
             bookingId: bookingId,
-            petName: petNameController.text,
-            breed: breedController.text,
+            petName: selectedPetName!,
+            breed: selectedPetBreed!,
             specialNotes: notesController.text,
             selectedPackage: selectedPackage,
           ),
         ),
       );
     } else {
+      // Show which fields are missing
+      List<String> missingFields = [];
+      if (!_formKey.currentState!.validate()) missingFields.add('Form validation failed');
+      if (checkInDate == null) missingFields.add('Check-in date');
+      if (checkOutDate == null) missingFields.add('Check-out date');
+      if (selectedPetId == null) missingFields.add('Pet selection');
+      if (selectedPackage == null) missingFields.add('Package selection');
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text("Please complete all required fields"),
+          content: Text(
+            missingFields.isEmpty 
+                ? "Please complete all required fields"
+                : "Missing: ${missingFields.join(', ')}"
+          ),
           backgroundColor: Colors.red.shade400,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 4),
         ),
       );
     }
@@ -225,13 +275,36 @@ class _BookingPageState extends State<BookingPage> {
                         ),
                       ),
                       const Spacer(),
-                      Text(
-                        'RM ${package['price']}/day',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: package['color'] as Color,
-                        ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            'RM ${package['price']}/day',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: package['color'] as Color,
+                            ),
+                          ),
+                          if (checkInDate != null && checkOutDate != null && isSelected) ...[
+                            const Gap(2),
+                            Text(
+                              '${checkOutDate!.difference(checkInDate!).inDays} days',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Styles.blackColor.withOpacity(0.6),
+                              ),
+                            ),
+                            Text(
+                              'Total: RM ${(package['price'] * checkOutDate!.difference(checkInDate!).inDays).toStringAsFixed(2)}',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: package['color'] as Color,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
@@ -279,14 +352,6 @@ class _BookingPageState extends State<BookingPage> {
   }
 
   @override
-  void dispose() {
-    petNameController.dispose();
-    breedController.dispose();
-    notesController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -311,102 +376,195 @@ class _BookingPageState extends State<BookingPage> {
                 ),
               ),
               const Gap(10),
+              
+              // Display selected service (Hotel Accommodation only)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 15),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Styles.bgColor,
+                  gradient: LinearGradient(
+                    colors: [
+                      Styles.highlightColor.withOpacity(0.1),
+                      Styles.highlightColor.withOpacity(0.05),
+                    ],
+                  ),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: selectedService == null 
-                        ? Colors.grey.shade300 
-                        : Styles.highlightColor.withOpacity(0.5),
+                    color: Styles.highlightColor.withOpacity(0.3),
                     width: 1.5,
                   ),
                 ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: selectedService,
-                    hint: Text(
-                      'Choose a service',
-                      style: TextStyle(color: Styles.blackColor.withOpacity(0.5)),
+                child: Row(
+                  children: [
+                    Icon(Icons.hotel, color: Styles.highlightColor, size: 28),
+                    const Gap(12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Hotel Accommodation',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Styles.blackColor,
+                            ),
+                          ),
+                          const Gap(4),
+                          Text(
+                            'Multi-day pet boarding service',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Styles.blackColor.withOpacity(0.6),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    isExpanded: true,
-                    icon: Icon(Icons.arrow_drop_down, color: Styles.highlightColor),
-                    items: availableServices.map((service) {
-                      return DropdownMenuItem(
-                        value: service,
-                        child: Text(
-                          service,
-                          style: const TextStyle(fontSize: 15),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        selectedService = value;
-                        // Reset package and checkout date when service changes
-                        if (value?.contains('Daycare') ?? false) {
-                          selectedPackage = null;
-                          checkOutDate = null;
-                        }
-                      });
-                    },
-                  ),
+                  ],
                 ),
               ),
               const Gap(20),
 
-              // Hotel Package Selection (only for Hotel Accommodation)
-              if (isHotelAccommodation) ...[
-                Text(
-                  'Select Package *',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Styles.blackColor,
-                  ),
+              // Hotel Package Selection
+              Text(
+                'Select Package *',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Styles.blackColor,
                 ),
-                const Gap(10),
-                ...hotelPackages.map((package) => _buildPackageCard(package)).toList(),
-                const Gap(10),
-              ],
-
-              // Pet Name
-              TextFormField(
-                controller: petNameController,
-                decoration: InputDecoration(
-                  labelText: "${widget.petType} Name *",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Styles.highlightColor, width: 2),
-                  ),
-                  prefixIcon: Icon(Icons.pets, color: Styles.highlightColor),
-                ),
-                validator: (value) =>
-                    value!.isEmpty ? "Enter your ${widget.petType.toLowerCase()}'s name" : null,
               ),
-              const Gap(15),
+              const Gap(10),
+              ...hotelPackages.map((package) => _buildPackageCard(package)).toList(),
+              const Gap(20),
 
-              // Breed
-              TextFormField(
-                controller: breedController,
-                decoration: InputDecoration(
-                  labelText: "Breed *",
-                  border: OutlineInputBorder(
+              // Pet Selection Dropdown
+              if (userPets.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.orange.shade300, width: 2),
                   ),
-                  focusedBorder: OutlineInputBorder(
+                  child: Column(
+                    children: [
+                      Icon(Icons.pets, size: 40, color: Colors.orange.shade700),
+                      const Gap(10),
+                      Text(
+                        'No ${widget.petType.toLowerCase()}s found',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.orange.shade900,
+                        ),
+                      ),
+                      const Gap(5),
+                      Text(
+                        'Please add a ${widget.petType.toLowerCase()} to your profile first',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.orange.shade700,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: Styles.bgColor,
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Styles.highlightColor, width: 2),
+                    border: Border.all(
+                      color: selectedPetId != null 
+                          ? Styles.highlightColor 
+                          : Colors.grey.shade400,
+                      width: selectedPetId != null ? 2 : 1,
+                    ),
                   ),
-                  prefixIcon: Icon(Icons.info_outline, color: Styles.highlightColor),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      isExpanded: true,
+                      value: selectedPetId,
+                      hint: Row(
+                        children: [
+                          Icon(Icons.pets, color: Styles.highlightColor),
+                          const Gap(10),
+                          Text(
+                            'Select Your ${widget.petType}',
+                            style: TextStyle(
+                              color: Styles.highlightColor,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ],
+                      ),
+                      items: userPets.map((pet) {
+                        return DropdownMenuItem<String>(
+                          value: pet['id'],
+                          child: Row(
+                            children: [
+                              // Pet image or icon
+                              Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Styles.highlightColor.withOpacity(0.1),
+                                  image: pet['imageUrl'] != null && pet['imageUrl'].isNotEmpty
+                                      ? DecorationImage(
+                                          image: NetworkImage(pet['imageUrl']),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : null,
+                                ),
+                                child: pet['imageUrl'] == null || pet['imageUrl'].isEmpty
+                                    ? Icon(Icons.pets, color: Styles.highlightColor, size: 20)
+                                    : null,
+                              ),
+                              const Gap(12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      pet['name'],
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      pet['breed'],
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        setState(() {
+                          selectedPetId = value;
+                          final pet = userPets.firstWhere((p) => p['id'] == value);
+                          selectedPetName = pet['name'];
+                          selectedPetBreed = pet['breed'];
+                        });
+                      },
+                      icon: Icon(Icons.arrow_drop_down, color: Styles.highlightColor),
+                      dropdownColor: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
                 ),
-                validator: (value) =>
-                    value!.isEmpty ? "Enter the breed" : null,
-              ),
               const Gap(20),
 
               // Check-in date
@@ -425,12 +583,8 @@ class _BookingPageState extends State<BookingPage> {
                   leading: Icon(Icons.calendar_today, color: Styles.highlightColor),
                   title: Text(
                     checkInDate == null
-                        ? isDaycare 
-                            ? "Select Service Date *"
-                            : "Select Check-In Date *"
-                        : isDaycare
-                            ? "Service Date: ${DateFormat('MMM d, yyyy').format(checkInDate!)}"
-                            : "Check-In: ${DateFormat('MMM d, yyyy').format(checkInDate!)}",
+                        ? "Select Check-In Date *"
+                        : "Check-In: ${DateFormat('MMM d, yyyy').format(checkInDate!)}",
                     style: TextStyle(
                       color: checkInDate == null 
                           ? Styles.blackColor.withOpacity(0.5)
@@ -442,46 +596,10 @@ class _BookingPageState extends State<BookingPage> {
                   onTap: () => _pickDate(true),
                 ),
               ),
-              const Gap(15),
-
-              // Check-in time
-              Container(
-                decoration: BoxDecoration(
-                  color: Styles.bgColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: checkInTime == null 
-                        ? Colors.grey.shade300 
-                        : Styles.highlightColor.withOpacity(0.5),
-                    width: 1.5,
-                  ),
-                ),
-                child: ListTile(
-                  leading: Icon(Icons.access_time, color: Styles.highlightColor),
-                  title: Text(
-                    checkInTime == null
-                        ? isDaycare
-                            ? "Select Drop-off Time *"
-                            : "Select Check-In Time *"
-                        : isDaycare
-                            ? "Drop-off: ${checkInTime!.format(context)}"
-                            : "Time: ${checkInTime!.format(context)}",
-                    style: TextStyle(
-                      color: checkInTime == null 
-                          ? Styles.blackColor.withOpacity(0.5)
-                          : Styles.blackColor,
-                      fontWeight: checkInTime != null ? FontWeight.w500 : FontWeight.normal,
-                    ),
-                  ),
-                  trailing: Icon(Icons.arrow_forward_ios, size: 16, color: Styles.highlightColor),
-                  onTap: _pickTime,
-                ),
-              ),
               
-              // Check-out date (only for Hotel Accommodation)
-              if (isHotelAccommodation) ...[
-                const Gap(15),
-                Container(
+              // Check-out date (required for hotel accommodation)
+              const Gap(15),
+              Container(
                   decoration: BoxDecoration(
                     color: Styles.bgColor,
                     borderRadius: BorderRadius.circular(12),
@@ -509,7 +627,6 @@ class _BookingPageState extends State<BookingPage> {
                     onTap: () => _pickDate(false),
                   ),
                 ),
-              ],
               
               const Gap(20),
 

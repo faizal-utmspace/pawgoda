@@ -1,6 +1,13 @@
+import 'dart:convert';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:gap/gap.dart';
+import '../keys.dart';
 import '../utils/styles.dart';
+import 'package:http/http.dart' as http;
 
 class PaymentPage extends StatefulWidget {
   final String bookingId;
@@ -26,6 +33,9 @@ class _PaymentPageState extends State<PaymentPage> {
   final TextEditingController cardHolderController = TextEditingController();
   final TextEditingController expiryController = TextEditingController();
   final TextEditingController cvvController = TextEditingController();
+  
+  Map<String, dynamic>? intentPaymentData;
+  String? currentPaymentIntentId; // NEW: Track current payment intent ID
 
   // Calculate amount based on service (in real app, this comes from backend)
   double get totalAmount => widget.amount > 0 ? widget.amount : _calculateAmount();
@@ -175,20 +185,9 @@ class _PaymentPageState extends State<PaymentPage> {
             const Gap(30),
 
             // Payment Details Form
-            if (selectedPaymentMethod == 'credit_card') ...[
-              Text(
-                'Card Details',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Styles.blackColor,
-                ),
-              ),
-              const Gap(15),
-              _buildCardForm(),
-            ] else if (selectedPaymentMethod == 'digital_wallet') ...[
+            if (selectedPaymentMethod == 'digital_wallet') ...[
               _buildDigitalWalletOptions(),
-            ] else ...[
+            ] else if (selectedPaymentMethod == 'bank_transfer') ...[
               _buildBankTransferInfo(),
             ],
 
@@ -196,7 +195,12 @@ class _PaymentPageState extends State<PaymentPage> {
 
             // Pay Now Button
             ElevatedButton(
-              onPressed: _processPayment,
+              onPressed: () {
+                paymentSheetInitialization(
+                  totalAmount.round().toString(),
+                  "myr",
+                );
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Styles.highlightColor,
                 foregroundColor: Colors.white,
@@ -228,7 +232,7 @@ class _PaymentPageState extends State<PaymentPage> {
                 ),
                 const Gap(5),
                 Text(
-                  'Secure payment powered by PawGoda',
+                  'Secure payment powered by Stripe',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey.shade600,
@@ -325,102 +329,19 @@ class _PaymentPageState extends State<PaymentPage> {
     );
   }
 
-  Widget _buildCardForm() {
-    return Column(
-      children: [
-        TextField(
-          controller: cardNumberController,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            labelText: 'Card Number',
-            hintText: '1234 5678 9012 3456',
-            prefixIcon: Icon(Icons.credit_card, color: Styles.highlightColor),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Styles.highlightColor, width: 2),
-            ),
-          ),
-        ),
-        const Gap(15),
-        TextField(
-          controller: cardHolderController,
-          textCapitalization: TextCapitalization.words,
-          decoration: InputDecoration(
-            labelText: 'Card Holder Name',
-            hintText: 'John Doe',
-            prefixIcon: Icon(Icons.person, color: Styles.highlightColor),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Styles.highlightColor, width: 2),
-            ),
-          ),
-        ),
-        const Gap(15),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: expiryController,
-                keyboardType: TextInputType.datetime,
-                decoration: InputDecoration(
-                  labelText: 'Expiry Date',
-                  hintText: 'MM/YY',
-                  prefixIcon: Icon(Icons.calendar_today, color: Styles.highlightColor),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Styles.highlightColor, width: 2),
-                  ),
-                ),
-              ),
-            ),
-            const Gap(15),
-            Expanded(
-              child: TextField(
-                controller: cvvController,
-                keyboardType: TextInputType.number,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'CVV',
-                  hintText: '123',
-                  prefixIcon: Icon(Icons.lock, color: Styles.highlightColor),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Styles.highlightColor, width: 2),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
   Widget _buildDigitalWalletOptions() {
     return Column(
       children: [
-        _buildWalletOption('Apple Pay', 'assets/svg/apple_pay.svg'),
+        _buildWalletOption('Apple Pay', Icons.apple),
         const Gap(10),
-        _buildWalletOption('Google Pay', 'assets/svg/google_pay.svg'),
+        _buildWalletOption('Google Pay', Icons.android),
         const Gap(10),
-        _buildWalletOption('PayPal', 'assets/svg/paypal.svg'),
+        _buildWalletOption('PayPal', Icons.payment),
       ],
     );
   }
 
-  Widget _buildWalletOption(String name, String iconPath) {
+  Widget _buildWalletOption(String name, IconData icon) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -430,18 +351,15 @@ class _PaymentPageState extends State<PaymentPage> {
       ),
       child: Row(
         children: [
-          Icon(Icons.account_balance_wallet, color: Styles.highlightColor),
+          Icon(icon, color: Styles.highlightColor),
           const Gap(15),
           Text(
             name,
             style: TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w500,
               color: Styles.blackColor,
             ),
           ),
-          const Spacer(),
-          Icon(Icons.arrow_forward_ios, size: 16, color: Styles.highlightColor),
         ],
       ),
     );
@@ -451,51 +369,42 @@ class _PaymentPageState extends State<PaymentPage> {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Styles.bgColor,
+        color: Colors.blue.shade50,
         borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: Colors.blue.shade200),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Bank Transfer Details',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Styles.blackColor,
-            ),
+          Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.blue.shade700),
+              const Gap(10),
+              Text(
+                'Bank Transfer Details',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue.shade900,
+                ),
+              ),
+            ],
           ),
           const Gap(15),
-          _buildBankDetail('Bank Name', 'PawGoda Bank'),
-          const Gap(10),
+          _buildBankDetail('Bank Name', 'Maybank'),
+          const Gap(8),
           _buildBankDetail('Account Number', '1234567890'),
-          const Gap(10),
-          _buildBankDetail('Account Name', 'PawGoda Pet Hotel'),
-          const Gap(10),
+          const Gap(8),
+          _buildBankDetail('Account Name', 'Pawgoda Sdn Bhd'),
+          const Gap(8),
           _buildBankDetail('Reference', widget.bookingId),
           const Gap(15),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.orange.shade50,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.orange.shade200),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.info, color: Colors.orange.shade700, size: 20),
-                const Gap(10),
-                Expanded(
-                  child: Text(
-                    'Please include your booking ID as reference',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.orange.shade700,
-                    ),
-                  ),
-                ),
-              ],
+          Text(
+            'Please include booking ID as reference',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.blue.shade700,
+              fontStyle: FontStyle.italic,
             ),
           ),
         ],
@@ -511,50 +420,371 @@ class _PaymentPageState extends State<PaymentPage> {
           label,
           style: TextStyle(
             fontSize: 14,
-            color: Styles.blackColor.withOpacity(0.6),
+            color: Colors.blue.shade900,
           ),
         ),
         Text(
           value,
           style: TextStyle(
             fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: Styles.blackColor,
+            fontWeight: FontWeight.bold,
+            color: Colors.blue.shade900,
           ),
         ),
       ],
     );
   }
 
-  void _processPayment() {
-    // Show loading
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Center(
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(color: Styles.highlightColor),
-              const Gap(20),
-              const Text('Processing payment...'),
-            ],
-          ),
-        ),
-      ),
-    );
+  // ========== FIREBASE LOGGING METHODS ==========
+  
+  /// Log payment attempt to Firebase
+  Future<void> _logPaymentToFirebase({
+    required String status,
+    String? error,
+    String? paymentIntentId,
+  }) async {
+    try {
+      await FirebaseFirestore.instance.collection('payment').add({
+        'bookingId': widget.bookingId,
+        'serviceName': widget.serviceName,
+        'petName': widget.petName,
+        'amount': totalAmount,
+        'status': status,
+        'timestamp': FieldValue.serverTimestamp(),
+        'paymentMethod': selectedPaymentMethod,
+        if (error != null) 'error': error,
+        if (paymentIntentId != null) 'paymentIntentId': paymentIntentId,
+      });
+      
+      debugPrint('✅ Payment logged to Firebase: $status');
+    } catch (e) {
+      debugPrint('❌ Failed to log payment to Firebase: $e');
+      // Don't throw - logging failure shouldn't stop payment process
+    }
+  }
 
-    // Simulate payment processing
-    Future.delayed(const Duration(seconds: 2), () {
-      Navigator.pop(context); // Close loading
-      _showPaymentSuccess();
-    });
+  // ========== NEW HELPER FUNCTIONS (ADDED) ==========
+  
+  /// NEW: Check if payment already logged to prevent duplicates
+  Future<bool> _isPaymentAlreadyLogged(String paymentIntentId) async {
+    try {
+      final existingPayments = await FirebaseFirestore.instance
+          .collection('payment')
+          .where('paymentIntentId', isEqualTo: paymentIntentId)
+          .limit(1)
+          .get();
+      
+      return existingPayments.docs.isNotEmpty;
+    } catch (e) {
+      debugPrint('⚠️ Error checking existing payment: $e');
+      return false; // If check fails, allow logging (safer)
+    }
+  }
+
+  /// NEW: Log payment with duplicate prevention
+  Future<void> _logPaymentSafely({
+    required String status,
+    String? error,
+    String? paymentIntentId,
+  }) async {
+    // Check for duplicates if we have a payment intent ID
+    if (paymentIntentId != null) {
+      final alreadyLogged = await _isPaymentAlreadyLogged(paymentIntentId);
+      if (alreadyLogged) {
+        debugPrint('⚠️ Payment already logged: $paymentIntentId (skipping duplicate)');
+        return; // Skip logging duplicate
+      }
+    }
+    
+    // Use existing function to log
+    await _logPaymentToFirebase(
+      status: status,
+      error: error,
+      paymentIntentId: paymentIntentId,
+    );
+  }
+
+  /// NEW: Update booking document with payment status
+  Future<void> _updateBookingPaymentStatus(String status, String? paymentIntentId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('bookings')
+          .doc(widget.bookingId)
+          .update({
+        'paymentStatus': status,
+        if (paymentIntentId != null) 'paymentIntentId': paymentIntentId,
+        if (status == 'success') 'paidAt': FieldValue.serverTimestamp(),
+      });
+      
+      debugPrint('✅ Booking payment status updated: $status');
+    } catch (e) {
+      debugPrint('⚠️ Failed to update booking status: $e');
+      // Don't throw - this shouldn't stop the payment flow
+    }
+  }
+
+  // ========== PAYMENT PROCESSING METHODS ==========
+  
+  Future<void> paymentSheetInitialization(String amountToBeCharge, String currency) async {
+    try {
+      debugPrint('💳 Initializing payment sheet...');
+      debugPrint('   Amount: $amountToBeCharge $currency');
+      
+      // Log payment attempt to Firebase
+      await _logPaymentToFirebase(status: 'pending');
+
+      try {
+        intentPaymentData = await makeIntentForPayment(amountToBeCharge, currency);
+        
+        if (intentPaymentData == null) {
+          throw Exception('Failed to create payment intent');
+        }
+
+        // NEW: Store the payment intent ID
+        currentPaymentIntentId = intentPaymentData!['id'];
+
+        debugPrint('✅ Payment intent data received');
+        debugPrint('   Client secret: ${intentPaymentData!['client_secret']}');
+        debugPrint('   Payment Intent ID: $currentPaymentIntentId'); // NEW: Log the ID
+
+        await Stripe.instance.initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+            paymentIntentClientSecret: intentPaymentData!['client_secret'],
+            merchantDisplayName: 'Pawgoda',
+            style: ThemeMode.light,
+            billingDetailsCollectionConfiguration: const BillingDetailsCollectionConfiguration(
+              name: CollectionMode.always,
+              email: CollectionMode.always,
+              phone: CollectionMode.always,
+            ),
+          ),
+        );
+
+        debugPrint('✅ Payment sheet initialized');
+
+        await showPaymentSheet();
+
+      } catch (initError) {
+        debugPrint('❌ Payment sheet init error: $initError');
+        
+        // NEW: Log error with duplicate prevention using tracked ID
+        await _logPaymentSafely(
+          status: 'failed',
+          error: initError.toString(),
+          paymentIntentId: currentPaymentIntentId, // NEW: Use tracked ID
+        );
+        
+        // NEW: Update booking status
+        await _updateBookingPaymentStatus('failed', currentPaymentIntentId);
+        
+        rethrow;
+      }
+      
+    } catch (errorMsg, stackTrace) {
+      debugPrint('❌ Payment sheet initialization failed!');
+      debugPrint('   Error: $errorMsg');
+      if (kDebugMode) {
+        debugPrint('   Stack trace: $stackTrace');
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const Gap(12),
+                Expanded(
+                  child: Text('Payment error: ${errorMsg.toString()}'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>?> makeIntentForPayment(String amountToBeCharge, String currency) async {
+    try {
+      debugPrint('📤 Creating payment intent...');
+      
+      final amountInCents = (int.parse(amountToBeCharge) * 100).toString();
+      
+      Map<String, dynamic> paymentInfo = {
+        "amount": amountInCents,
+        "currency": currency.toLowerCase(), 
+        "payment_method_types[]": "card",
+      };
+      
+      debugPrint('   Amount: $amountToBeCharge ${currency.toUpperCase()}');
+      debugPrint('   Amount in cents: $amountInCents');
+
+      var responseStripe = await http.post(
+        Uri.parse("https://api.stripe.com/v1/payment_intents"),
+        body: paymentInfo,
+        headers: {
+          "Authorization": "Bearer $stripeSecretKey",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+      );
+
+      debugPrint('   Response status: ${responseStripe.statusCode}');
+      
+      if (responseStripe.statusCode == 200) {
+        final responseData = jsonDecode(responseStripe.body);
+        debugPrint('   Response body: ${responseStripe.body}');
+        debugPrint('✅ Payment intent created successfully');
+        return responseData;
+      } else {
+        debugPrint('❌ Failed to create payment intent');
+        debugPrint('   Status code: ${responseStripe.statusCode}');
+        debugPrint('   Response: ${responseStripe.body}');
+        throw Exception('Payment intent creation failed: ${responseStripe.body}');
+      }
+    } catch (errorMsg) {
+      debugPrint('❌ Error creating payment intent: $errorMsg');
+      if (kDebugMode) {
+        debugPrint('   Full error: ${errorMsg.toString()}');
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> showPaymentSheet() async {
+    try {
+      debugPrint('📱 Presenting payment sheet...');
+      
+      await Stripe.instance.presentPaymentSheet();
+      
+      debugPrint('✅ Payment completed successfully!');
+      
+      // NEW: Log successful payment with duplicate prevention
+      await _logPaymentSafely(
+        status: 'success',
+        paymentIntentId: currentPaymentIntentId,
+      );
+
+      // NEW: Update booking document with payment status
+      await _updateBookingPaymentStatus('success', currentPaymentIntentId);
+     
+      setState(() {
+        intentPaymentData = null;
+        currentPaymentIntentId = null; // NEW: Clear the payment intent ID
+      });
+      
+      if (mounted) {
+        _showPaymentSuccess();
+      }
+    } on StripeException catch (error) {
+      debugPrint('❌ Stripe error occurred!');
+      debugPrint('   Error code: ${error.error.code}');
+      debugPrint('   Error message: ${error.error.message}');
+      debugPrint('   Error localized message: ${error.error.localizedMessage}');
+      
+      if (kDebugMode) {
+        debugPrint('   Full error: $error');
+      }
+      
+      // Log failed payment to Firebase
+      if (error.error.code != FailureCode.Canceled) {
+        // NEW: Use safe logging to prevent duplicates
+        await _logPaymentSafely(
+          status: 'failed',
+          error: error.error.message ?? 'Stripe error',
+          paymentIntentId: currentPaymentIntentId, // NEW: Use tracked ID
+        );
+        
+        // NEW: Update booking status
+        await _updateBookingPaymentStatus('failed', currentPaymentIntentId);
+      }
+      
+      if (mounted) {
+        if (error.error.code == FailureCode.Canceled) {
+          // User cancelled - don't log as failed
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.white),
+                  Gap(12),
+                  Text('Payment cancelled'),
+                ],
+              ),
+              backgroundColor: Colors.orange,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        } else {
+          // Other error
+          showDialog(
+            context: context,
+            builder: (c) => AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red.shade700),
+                  const Gap(10),
+                  const Text('Payment Failed'),
+                ],
+              ),
+              content: Text(
+                error.error.localizedMessage ?? error.error.message ?? 'An error occurred',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(c),
+                  child: Text(
+                    'OK',
+                    style: TextStyle(color: Styles.highlightColor),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+    } catch (errorMsg, stackTrace) {
+      debugPrint('❌ Unexpected error showing payment sheet!');
+      debugPrint('   Error: $errorMsg');
+      if (kDebugMode) {
+        debugPrint('   Stack trace: $stackTrace');
+      }
+      
+      // Log failed payment to Firebase
+      // NEW: Use safe logging to prevent duplicates
+      await _logPaymentSafely(
+        status: 'failed',
+        error: errorMsg.toString(),
+        paymentIntentId: currentPaymentIntentId, // NEW: Use tracked ID
+      );
+      
+      // NEW: Update booking status
+      await _updateBookingPaymentStatus('failed', currentPaymentIntentId);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const Gap(12),
+                Expanded(
+                  child: Text('Payment error: ${errorMsg.toString()}'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   void _showPaymentSuccess() {
@@ -611,6 +841,7 @@ class _PaymentPageState extends State<PaymentPage> {
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Styles.highlightColor,
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 40,
                   vertical: 14,
@@ -619,7 +850,12 @@ class _PaymentPageState extends State<PaymentPage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: const Text('Back to Home'),
+              child: const Text(
+                'Back to Home',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ],
         ),

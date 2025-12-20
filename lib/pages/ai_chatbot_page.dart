@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:gap/gap.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../services/ai_service.dart';
 import '../utils/styles.dart';
 
-/// AI Chatbot Page for Customer Support
-/// Customers can ask questions about services, bookings, pet care, etc.
+
 class AIChatbotPage extends StatefulWidget {
-  const AIChatbotPage({Key? key}) : super(key: key);
+  final bool isStaffMode;
+  
+  const AIChatbotPage({
+    Key? key,
+    this.isStaffMode = false,
+  }) : super(key: key);
 
   @override
   State<AIChatbotPage> createState() => _AIChatbotPageState();
@@ -17,20 +23,67 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
   bool _isTyping = false;
+  
+  late final AIService _aiService;
 
   @override
   void initState() {
     super.initState();
+    
+    final apiKey = dotenv.env['GROQ_API_KEY'] ?? '';
+    
+    if (apiKey.isEmpty) {
+      print('❌ GROQ_API_KEY not found in .env file!');
+      print('💡 Add GROQ_API_KEY=your-key to .env file');
+      print('💡 Get free key at: https://console.groq.com/');
+    } else {
+      print('✅ Groq API key loaded');
+    }
+    
+    _aiService = AIService(
+      apiKey: apiKey,
+      isStaffMode: widget.isStaffMode,
+    );
+    
     _addWelcomeMessage();
+  }
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   void _addWelcomeMessage() {
     setState(() {
-      _messages.add(ChatMessage(
-        text: "👋 Hi! I'm PawGoda AI Assistant. How can I help you today?\n\nYou can ask me about:\n• Hotel packages & pricing\n• Daycare services\n• Pet care activities\n• Booking process\n• Our facilities\n• And more!",
-        isUser: false,
-        timestamp: DateTime.now(),
-      ));
+      if (widget.isStaffMode) {
+        _messages.add(ChatMessage(
+          text: "👋 Hi! I'm PawGoda Staff AI Assistant.\n\n"
+              "I can help you with:\n\n"
+              "📋 Today's schedule and tasks\n"
+              "📅 Booking management\n"
+              "✅ Activity updates\n"
+              "🐾 Pet information\n"
+              "📊 Statistics and reports\n\n"
+              "What do you need help with?",
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      } else {
+        _messages.add(ChatMessage(
+          text: "👋 Hi! I'm PawGoda AI Assistant.\n\n"
+              "I have access to your information and can help with:\n\n"
+              "🐾 Your pets\n"
+              "📅 Your bookings\n"
+              "💰 Hotel packages & pricing\n"
+              "🎯 Services we offer\n"
+              "📸 Activity updates\n\n"
+              "How can I help you today?",
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      }
     });
   }
 
@@ -50,252 +103,32 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
     _messageController.clear();
     _scrollToBottom();
 
-    // Simulate AI response delay
-    await Future.delayed(const Duration(milliseconds: 800));
+    try {
+      // Get AI response with Firebase context
+      final response = await _aiService.getAIResponse(text);
 
-    // Generate AI response
-    final response = _generateAIResponse(text);
-
-    setState(() {
-      _messages.add(ChatMessage(
-        text: response,
-        isUser: false,
-        timestamp: DateTime.now(),
-      ));
-      _isTyping = false;
-    });
+      setState(() {
+        _messages.add(ChatMessage(
+          text: response,
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+        _isTyping = false;
+      });
+    } catch (e) {
+      print('Error: $e');
+      setState(() {
+        _messages.add(ChatMessage(
+          text: "I apologize, but I'm having trouble right now. "
+              "Please try again or contact support.",
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+        _isTyping = false;
+      });
+    }
 
     _scrollToBottom();
-  }
-
-  String _generateAIResponse(String userMessage) {
-    final message = userMessage.toLowerCase();
-
-    // Hotel packages
-    if (message.contains('package') || message.contains('price') || message.contains('pricing') || message.contains('cost')) {
-      return "🏨 We offer 3 hotel packages:\n\n"
-          "💙 Normal Package (RM 80/day)\n"
-          "• Standard room\n"
-          "• Basic care\n"
-          "• Daily feeding\n"
-          "• 1 playtime session\n\n"
-          "💜 Deluxe Package (RM 150/day)\n"
-          "• Spacious suite\n"
-          "• Premium care\n"
-          "• Custom feeding schedule\n"
-          "• 2 playtime sessions\n"
-          "• Daily grooming\n\n"
-          "⭐ VIP Package (RM 250/day)\n"
-          "• Luxury suite\n"
-          "• VIP care\n"
-          "• Personalized menu\n"
-          "• Unlimited playtime\n"
-          "• Daily grooming & spa\n"
-          "• 24/7 camera access\n"
-          "• Dedicated caretaker\n\n"
-          "Which package interests you?";
-    }
-
-    // Daycare
-    if (message.contains('daycare') || message.contains('day care')) {
-      return "🌞 Our Daycare Service (RM 60/day):\n\n"
-          "• Drop-off in the morning\n"
-          "• Pick-up in the evening\n"
-          "• Supervised playtime\n"
-          "• Feeding included\n"
-          "• Activity updates with photos\n"
-          "• Perfect for working pet owners!\n\n"
-          "No checkout date needed - just select the service date when booking.";
-    }
-
-    // Activities
-    if (message.contains('activit') || message.contains('care') || message.contains('service')) {
-      return "🎯 We offer 4 main care activities:\n\n"
-          "🍽️ Feeding\n"
-          "Regular feeding according to your pet's schedule\n\n"
-          "🚶 Walking\n"
-          "Daily walks and outdoor exercise\n\n"
-          "🎮 Playtime\n"
-          "Interactive play sessions\n\n"
-          "💊 Medication\n"
-          "Medication administration if needed\n\n"
-          "You can select which activities you want during booking, and our staff will update you with photos!";
-    }
-
-    // Booking
-    if (message.contains('book') || message.contains('reserve') || message.contains('how to')) {
-      return "📝 Booking is easy! Here's how:\n\n"
-          "1️⃣ Select your pet type (Cat/Dog/Rabbit)\n"
-          "2️⃣ Choose service (Hotel or Daycare)\n"
-          "3️⃣ Pick your package (for hotel stays)\n"
-          "4️⃣ Enter pet details and dates\n"
-          "5️⃣ Select care activities you want\n"
-          "6️⃣ Confirm and pay\n"
-          "7️⃣ Track updates in real-time!\n\n"
-          "Need help with any specific step?";
-    }
-
-    // Real-time updates
-    if (message.contains('update') || message.contains('photo') || message.contains('track')) {
-      return "📸 Real-time Updates:\n\n"
-          "• Our staff updates selected activities daily\n"
-          "• Each update includes photos of your pet\n"
-          "• View updates anytime in the app\n"
-          "• Get notifications for new updates\n"
-          "• See what your pet is doing throughout the day\n\n"
-          "You'll never miss a moment! 🐾";
-    }
-
-    // Pet types
-    if (message.contains('cat') || message.contains('dog') || message.contains('rabbit') || message.contains('pet type')) {
-      return "🐾 We welcome:\n\n"
-          "🐱 Cats - All breeds\n"
-          "🐶 Dogs - Small to large breeds\n"
-          "🐰 Rabbits - All breeds\n\n"
-          "Each pet gets personalized care based on their needs. Tell us about any special requirements during booking!";
-    }
-
-    // Facilities
-    if (message.contains('facilit') || message.contains('room') || message.contains('suite')) {
-      return "🏢 Our Facilities:\n\n"
-          "✨ Climate-controlled rooms\n"
-          "🎥 24/7 CCTV monitoring\n"
-          "🏃 Indoor & outdoor play areas\n"
-          "🛁 Professional grooming station\n"
-          "🏥 Veterinary support on-call\n"
-          "🍽️ Hygienic feeding areas\n"
-          "🛏️ Comfortable bedding\n\n"
-          "Your pet's comfort is our priority!";
-    }
-
-    // Safety
-    if (message.contains('safe') || message.contains('secure') || message.contains('monitor')) {
-      return "🔒 Safety & Security:\n\n"
-          "✅ 24/7 staff supervision\n"
-          "✅ CCTV monitoring\n"
-          "✅ Secure entry/exit\n"
-          "✅ Emergency vet on-call\n"
-          "✅ Separate areas for different pet sizes\n"
-          "✅ Regular health checks\n"
-          "✅ Climate-controlled environment\n\n"
-          "Your pet's safety is our top priority!";
-    }
-
-    // Contact
-    if (message.contains('contact') || message.contains('call') || message.contains('phone') || message.contains('email')) {
-      return "📞 Contact Us:\n\n"
-          "🏢 PawGoda Pet Hotel\n"
-          "📍 Johor Bahru, Johor, Malaysia\n"
-          "📧 support@pawgoda.com\n"
-          "📱 +60 12-345 6789\n"
-          "⏰ Operating Hours: 8AM - 8PM\n\n"
-          "We're here to help! 💚";
-    }
-
-    // Operating hours
-    if (message.contains('hour') || message.contains('time') || message.contains('open') || message.contains('close')) {
-      return "⏰ Operating Hours:\n\n"
-          "📅 Monday - Sunday\n"
-          "🕐 8:00 AM - 8:00 PM\n\n"
-          "Check-in: 8:00 AM - 12:00 PM\n"
-          "Check-out: 4:00 PM - 8:00 PM\n\n"
-          "We're open every day to serve you and your pets!";
-    }
-
-    // Payment
-    if (message.contains('payment') || message.contains('pay') || message.contains('method')) {
-      return "💳 Payment Methods:\n\n"
-          "✅ Credit/Debit Cards\n"
-          "✅ Online Banking\n"
-          "✅ Digital Wallets (Apple Pay, Google Pay)\n"
-          "✅ Bank Transfer\n\n"
-          "💰 Payment is processed securely after booking confirmation.\n\n"
-          "Need help with payment? Let me know!";
-    }
-
-    // Cancellation
-    if (message.contains('cancel') || message.contains('refund') || message.contains('change')) {
-      return "🔄 Booking Changes & Cancellation:\n\n"
-          "✅ Free cancellation up to 24 hours before check-in\n"
-          "✅ Change dates anytime (subject to availability)\n"
-          "✅ Full refund for cancellations made 24+ hours in advance\n"
-          "⚠️ 50% charge for cancellations within 24 hours\n\n"
-          "Need to modify your booking? Contact support or use the app!";
-    }
-
-    // Vaccination
-    if (message.contains('vaccin') || message.contains('medical') || message.contains('health')) {
-      return "💉 Health Requirements:\n\n"
-          "✅ Up-to-date vaccinations required\n"
-          "✅ Recent health check recommended\n"
-          "✅ Flea/tick treatment advised\n"
-          "📋 Please bring vaccination records\n\n"
-          "We can coordinate with your vet if needed. Your pet's health matters to us!";
-    }
-
-    // Food
-    if (message.contains('food') || message.contains('feed') || message.contains('meal') || message.contains('diet')) {
-      return "🍽️ Feeding Options:\n\n"
-          "✅ Premium pet food provided\n"
-          "✅ Custom feeding schedules\n"
-          "✅ Special diets accommodated\n"
-          "✅ Bring your own food (if preferred)\n"
-          "✅ Dietary restrictions supported\n\n"
-          "Just let us know your pet's food preferences during booking!";
-    }
-
-    // Grooming
-    if (message.contains('groom') || message.contains('bath') || message.contains('nail') || message.contains('spa')) {
-      return "✨ Grooming Services:\n\n"
-          "Included in Deluxe & VIP packages:\n"
-          "🛁 Professional bathing\n"
-          "✂️ Haircut & styling\n"
-          "💅 Nail trimming\n"
-          "👂 Ear cleaning\n"
-          "🦷 Teeth brushing\n\n"
-          "Add-on grooming available for Normal package holders!";
-    }
-
-    // Emergency
-    if (message.contains('emergency') || message.contains('urgent') || message.contains('help') || message.contains('problem')) {
-      return "🚨 Emergency Support:\n\n"
-          "For urgent matters:\n"
-          "📞 Call: +60 12-345 6789\n"
-          "📧 Email: emergency@pawgoda.com\n\n"
-          "🏥 We have 24/7 emergency vet support\n"
-          "🚑 Immediate response team\n\n"
-          "Your pet's wellbeing is our priority. Don't hesitate to reach out!";
-    }
-
-    // Thanks
-    if (message.contains('thank') || message.contains('appreciate')) {
-      return "💚 You're very welcome!\n\n"
-          "Is there anything else you'd like to know about PawGoda Pet Hotel? I'm here to help!";
-    }
-
-    // Greeting
-    if (message.contains('hello') || message.contains('hi') || message.contains('hey')) {
-      return "👋 Hello! How can I assist you today?\n\n"
-          "I can help you with:\n"
-          "• Packages & pricing\n"
-          "• Booking process\n"
-          "• Services & facilities\n"
-          "• Pet care information\n\n"
-          "What would you like to know?";
-    }
-
-    // Default response
-    return "I'd be happy to help! 🐾\n\n"
-        "You can ask me about:\n"
-        "🏨 Hotel packages & pricing\n"
-        "🌞 Daycare services\n"
-        "🎯 Pet care activities\n"
-        "📝 Booking process\n"
-        "🏢 Our facilities\n"
-        "💳 Payment methods\n"
-        "⏰ Operating hours\n"
-        "📞 Contact information\n\n"
-        "What would you like to know more about?";
   }
 
   void _scrollToBottom() {
@@ -311,55 +144,58 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
   }
 
   @override
-  void dispose() {
-    _messageController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
-        backgroundColor: Styles.highlightColor,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
+        backgroundColor: Colors.white,
         title: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Styles.highlightColor.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                Icons.smart_toy,
+                widget.isStaffMode ? Icons.work_outline : Icons.smart_toy,
                 color: Styles.highlightColor,
                 size: 24,
               ),
             ),
             const Gap(12),
-            const Expanded(
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'PawGoda AI',
-                    style: TextStyle(
-                      color: Colors.white,
+                    widget.isStaffMode ? 'Staff AI Assistant' : 'PawGoda AI',
+                    style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
+                      color: Colors.black87,
                     ),
                   ),
-                  Text(
-                    'Online • AI Assistant',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
-                    ),
+                  Row(
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Colors.green,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const Gap(6),
+                      Text(
+                        'Powered by Groq',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -368,94 +204,68 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            onPressed: () {
-              _showOptionsMenu();
-            },
+            icon: Icon(Icons.more_vert, color: Colors.grey.shade700),
+            onPressed: _showOptionsMenu,
           ),
         ],
       ),
       body: Column(
         children: [
-          // Chat messages
+          // Info banner
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            color: Styles.highlightColor.withOpacity(0.1),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 18,
+                  color: Styles.highlightColor,
+                ),
+                const Gap(8),
+                Expanded(
+                  child: Text(
+                    widget.isStaffMode 
+                        ? 'Connected to staff database for real-time information'
+                        : 'AI responses use your personal data from our system',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Styles.highlightColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Messages list
           Expanded(
-            child: Container(
-              color: Colors.grey.shade100,
-              child: ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(16),
-                itemCount: _messages.length,
-                itemBuilder: (context, index) {
-                  return _buildMessageBubble(_messages[index]);
-                },
-              ),
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(16),
+              itemCount: _messages.length + (_isTyping ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index == _messages.length && _isTyping) {
+                  return _buildTypingIndicator();
+                }
+                return _buildMessageBubble(_messages[index]);
+              },
             ),
           ),
 
-          // Typing indicator
-          if (_isTyping)
+          // Quick action suggestions
+          if (_messages.length <= 1)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Colors.grey.shade100,
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.smart_toy,
-                      color: Styles.highlightColor,
-                      size: 20,
-                    ),
-                  ),
-                  const Gap(8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildTypingDot(0),
-                        const Gap(4),
-                        _buildTypingDot(1),
-                        const Gap(4),
-                        _buildTypingDot(2),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          // Quick replies (shown initially)
-          if (_messages.length == 1)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Colors.grey.shade100,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  children: [
-                    _buildQuickReply('📦 Packages'),
-                    const Gap(8),
-                    _buildQuickReply('🌞 Daycare'),
-                    const Gap(8),
-                    _buildQuickReply('📝 How to book'),
-                    const Gap(8),
-                    _buildQuickReply('💳 Payment'),
-                  ],
+                  children: _getQuickActions(),
                 ),
               ),
             ),
+
+          const Gap(8),
 
           // Input area
           Container(
@@ -476,29 +286,25 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(25),
                     ),
                     child: TextField(
                       controller: _messageController,
                       decoration: InputDecoration(
-                        hintText: 'Type your message...',
+                        hintText: widget.isStaffMode 
+                            ? 'Ask about tasks, bookings...' 
+                            : 'Ask me anything...',
+                        hintStyle: TextStyle(color: Colors.grey.shade600),
                         border: InputBorder.none,
                         contentPadding: const EdgeInsets.symmetric(
                           horizontal: 20,
                           vertical: 12,
                         ),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            Icons.emoji_emotions_outlined,
-                            color: Colors.grey.shade600,
-                          ),
-                          onPressed: () {
-                            // Emoji picker can be added here
-                          },
-                        ),
                       ),
                       textCapitalization: TextCapitalization.sentences,
                       onSubmitted: _sendMessage,
+                      enabled: !_isTyping,
+                      maxLines: null,
                     ),
                   ),
                 ),
@@ -509,8 +315,19 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
                     shape: BoxShape.circle,
                   ),
                   child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white),
-                    onPressed: () => _sendMessage(_messageController.text),
+                    icon: _isTyping 
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Icon(Icons.send, color: Colors.white),
+                    onPressed: _isTyping 
+                        ? null 
+                        : () => _sendMessage(_messageController.text),
                   ),
                 ),
               ],
@@ -519,6 +336,30 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
         ],
       ),
     );
+  }
+
+  List<Widget> _getQuickActions() {
+    if (widget.isStaffMode) {
+      return [
+        _buildQuickAction('📋 Today\'s tasks', 'What are my tasks for today?'),
+        const Gap(8),
+        _buildQuickAction('📅 Bookings', 'Show me today\'s bookings'),
+        const Gap(8),
+        _buildQuickAction('🐾 Checked-in pets', 'Which pets are currently checked in?'),
+        const Gap(8),
+        _buildQuickAction('✅ Pending', 'What activities are pending?'),
+      ];
+    } else {
+      return [
+        _buildQuickAction('🐾 My pets', 'Show me my pets'),
+        const Gap(8),
+        _buildQuickAction('📅 Bookings', 'What are my bookings?'),
+        const Gap(8),
+        _buildQuickAction('💰 Packages', 'Tell me about packages'),
+        const Gap(8),
+        _buildQuickAction('📸 Updates', 'Any recent activity updates?'),
+      ];
+    }
   }
 
   Widget _buildMessageBubble(ChatMessage message) {
@@ -533,11 +374,11 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Styles.highlightColor.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),
               child: Icon(
-                Icons.smart_toy,
+                widget.isStaffMode ? Icons.work_outline : Icons.smart_toy,
                 color: Styles.highlightColor,
                 size: 20,
               ),
@@ -559,7 +400,12 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
                     color: message.isUser
                         ? Styles.highlightColor
                         : Colors.white,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.only(
+                      topLeft: const Radius.circular(20),
+                      topRight: const Radius.circular(20),
+                      bottomLeft: Radius.circular(message.isUser ? 20 : 4),
+                      bottomRight: Radius.circular(message.isUser ? 4 : 20),
+                    ),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.05),
@@ -571,7 +417,7 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
                   child: Text(
                     message.text,
                     style: TextStyle(
-                      color: message.isUser ? Colors.white : Styles.blackColor,
+                      color: message.isUser ? Colors.white : Colors.black87,
                       fontSize: 14,
                       height: 1.4,
                     ),
@@ -605,16 +451,60 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
     );
   }
 
+  Widget _buildTypingIndicator() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Styles.highlightColor.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              widget.isStaffMode ? Icons.work_outline : Icons.smart_toy,
+              color: Styles.highlightColor,
+              size: 20,
+            ),
+          ),
+          const Gap(8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 5,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildTypingDot(0),
+                const Gap(4),
+                _buildTypingDot(1),
+                const Gap(4),
+                _buildTypingDot(2),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTypingDot(int index) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
-      duration: const Duration(milliseconds: 600),
+      duration: Duration(milliseconds: 600 + (index * 100)),
       builder: (context, value, child) {
         return Transform.translate(
-          offset: Offset(
-            0,
-            -4 * (value - 0.5).abs() * 2,
-          ),
+          offset: Offset(0, -4 * (value - 0.5).abs() * 2),
           child: Container(
             width: 8,
             height: 8,
@@ -628,9 +518,9 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
     );
   }
 
-  Widget _buildQuickReply(String text) {
+  Widget _buildQuickAction(String label, String message) {
     return InkWell(
-      onTap: () => _sendMessage(text.substring(2)), // Remove emoji
+      onTap: () => _sendMessage(message),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
@@ -640,9 +530,16 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
             color: Styles.highlightColor.withOpacity(0.3),
             width: 1.5,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 5,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Text(
-          text,
+          label,
           style: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
@@ -664,6 +561,15 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const Gap(20),
             ListTile(
               leading: Icon(Icons.refresh, color: Styles.highlightColor),
               title: const Text('Start New Chat'),
@@ -675,28 +581,67 @@ class _AIChatbotPageState extends State<AIChatbotPage> {
                 });
               },
             ),
+            if (!widget.isStaffMode)
+              ListTile(
+                leading: Icon(Icons.contact_support, color: Styles.highlightColor),
+                title: const Text('Contact Support'),
+                onTap: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text('Redirecting to support...'),
+                      backgroundColor: Styles.highlightColor,
+                    ),
+                  );
+                },
+              ),
             ListTile(
-              leading: Icon(Icons.contact_support, color: Styles.highlightColor),
-              title: const Text('Contact Human Support'),
+              leading: Icon(Icons.info_outline, color: Styles.highlightColor),
+              title: const Text('About AI Assistant'),
               onTap: () {
                 Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: const Text('Redirecting to support...'),
-                    backgroundColor: Styles.highlightColor,
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.help_outline, color: Styles.highlightColor),
-              title: const Text('Help & FAQ'),
-              onTap: () {
-                Navigator.pop(context);
+                _showAboutDialog();
               },
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('About AI Assistant'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Powered by Groq AI (FREE)'),
+            const Gap(10),
+            const Text('This AI assistant has access to:'),
+            const Gap(10),
+            if (widget.isStaffMode) ...[
+              const Text('• All bookings'),
+              const Text('• Activity schedules'),
+              const Text('• Checked-in pets'),
+              const Text('• Task management'),
+            ] else ...[
+              const Text('• Your pet information'),
+              const Text('• Your bookings'),
+              const Text('• Activity updates'),
+              const Text('• Hotel packages'),
+              const Text('• Services'),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
   }
